@@ -45,7 +45,7 @@ test('saved profiles restore their own credential without retaining room votes',
   assert.throws(() => selectProfile('unknown'));
 });
 
-test('a closed round shows its verdict immediately and advances after two seconds', async () => {
+for (const outcome of ['miss', 'buzzer']) test(`a ${outcome} verdict appears immediately and ${outcome === 'buzzer' ? 'waits for the host' : 'advances after two seconds'}`, async () => {
   globalThis.localStorage = storage(); globalThis.sessionStorage = storage();
   globalThis.location = { pathname: '/tv', href: 'http://localhost/tv' };
   let tick; let ws; let now = 100000;
@@ -58,7 +58,7 @@ test('a closed round shows its verdict immediately and advances after two second
   };
   globalThis.fetch = async (url) => ({ ok: true, json: async () => url.endsWith('/session-catalog') ? [] : url.endsWith('/sessions') ? { session_id: 'room', invite_token: 'invite' } : {} });
   try {
-    const api = await import(await browserModule('src/api/index.ts'));
+    const api = await import(`${await browserModule('src/api/index.ts')}#${outcome}`);
     const snapshots = [];
     api.connect((s) => snapshots.push(s), () => {});
     await new Promise((done) => setTimeout(done, 10));
@@ -71,13 +71,20 @@ test('a closed round shows its verdict immediately and advances after two second
     ws.onmessage({ data: JSON.stringify({ type: 'state', state }) });
     state.voting_rounds[0].closed_at = new Date(now).toISOString();
     state.voting_rounds[0].close_reason = 'completed';
-    state.votes = [{ round_id: 'first', user_id: 'a', value: 1 }];
+    state.votes = [{ round_id: 'first', user_id: 'a', value: outcome === 'buzzer' ? 1 : -1 }];
     state.voting_rounds.push({ id: 'second', movie_id: 2, closed_at: null });
     ws.onmessage({ data: JSON.stringify({ type: 'state', state }) });
     assert.equal(snapshots.at(-1).phase, 'result');
-    assert.equal(snapshots.at(-1).outcome, 'buzzer');
+    assert.equal(snapshots.at(-1).outcome, outcome);
     now += 1999; tick(); assert.equal(snapshots.at(-1).phase, 'result');
-    now += 1; tick(); assert.equal(snapshots.at(-1).phase, 'trailer');
+    now += 1; tick();
+    if (outcome === 'buzzer') {
+      assert.equal(snapshots.at(-1).phase, 'result');
+      now += 60000; tick();
+      assert.equal(snapshots.at(-1).phase, 'result');
+      await api.act('next');
+    }
+    assert.equal(snapshots.at(-1).phase, 'trailer');
     assert.equal(snapshots.at(-1).movieId, 2);
   } finally { Date.now = originalNow; globalThis.setInterval = originalInterval; }
 });
@@ -95,4 +102,36 @@ test('logout clears the active identity and deletion removes only that saved pro
   localStorage.setItem('tandem.phone.active-profile', first);
   forget(true);
   assert.deepEqual(JSON.parse(localStorage.getItem('tandem.phone.profiles')).map((p) => p.name), ['Sam']);
+});
+
+test('phones show the golden buzzer when voting closes and wait for a new host stage', async () => {
+  globalThis.localStorage = storage(); globalThis.sessionStorage = storage();
+  globalThis.location = { pathname: '/phone/vote/1', href: 'http://localhost/phone/vote/1' };
+  sessionStorage.setItem('tandem.phone.session', 'phone-room');
+  let ws;
+  globalThis.WebSocket = class { constructor() { ws = this; } close() {} send() {} };
+  globalThis.fetch = async (url) => ({ ok: true, json: async () => url.endsWith('/session-catalog') ? [] : url.endsWith('/me') ? {user:'a'} : {session:{status:'active'}} });
+  const api = await import(`${await browserModule('src/api/index.ts')}#phone-buzzer`);
+  const flow = await import(await browserModule('src/lib/flow.ts'));
+  const snapshots = [];
+  api.connect((s) => snapshots.push(s), () => {});
+  await new Promise((done) => setTimeout(done, 10));
+  const state = {
+    session: {id:'phone-room',host_user_id:'tv',status:'active'}, profiles:[],session_members:[], session_movies:[], member_state:[], session_feeds:[],reactions:[],
+    server_now: new Date().toISOString(),
+    stage:{phase:'vote',round:1,roundId:'first',movieId:1},
+    voting_rounds:[{id:'first',movie_id:1,closed_at:'now',close_reason:'completed'},{id:'second',movie_id:2,closed_at:null}],
+    votes:[{round_id:'first',user_id:'a',value:1},{round_id:'first',user_id:'b',value:1}],
+  };
+  const send = () => ws.onmessage({data:JSON.stringify({type:'state',state})});
+  send();
+  assert.equal(flow.phonePath(snapshots.at(-1),'a'), '/phone/buzzer/1');
+  // Heartbeats and the already-open next round must not release the phone.
+  state.server_now = new Date(Date.now()+60000).toISOString();
+  state.stage.phase = 'trailer';
+  send();
+  assert.equal(flow.phonePath(snapshots.at(-1),'a'), '/phone/buzzer/1');
+  state.stage = {phase:'trailer',round:2,roundId:'second',movieId:2};
+  send();
+  assert.equal(flow.phonePath(snapshots.at(-1),'a'), '/phone/react/2');
 });

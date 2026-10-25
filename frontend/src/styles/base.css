@@ -139,7 +139,7 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- Wordmark: two overlapping seats, red and gold ---- */
+/* ---- Wordmark: the Filmocracy ballot logo ---- */
 
 .wordmark {
   display: inline-flex;
@@ -152,30 +152,10 @@ a {
 }
 
 .wordmark-mark {
-  position: relative;
+  display: block;
+  flex: none;
   width: 1.25em;
-  height: 0.8em;
-}
-
-.wordmark-mark::before,
-.wordmark-mark::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  width: 0.8em;
-  height: 0.8em;
-  border-radius: 50%;
-}
-
-.wordmark-mark::before {
-  left: 0;
-  background: var(--accent);
-}
-
-.wordmark-mark::after {
-  right: 0;
-  background: var(--gold);
-  opacity: 0.92;
+  height: auto;
 }
 
 /* ---- People ---- */

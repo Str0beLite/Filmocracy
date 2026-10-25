@@ -1247,3 +1247,11 @@
   background: transparent;
   color: var(--no);
 }
+
+/* Reserve the settings control's hit area beside the room badge. */
+.phone-with-settings .ps-top { padding-right: 52px; }
+.phone-with-settings .ps-top-end { flex: none; }
+@media (max-width: 359px) {
+  .phone-with-settings .ps-top .wordmark { font-size: 17px; }
+  .phone-with-settings .ps-top .room-pill { font-size: 11px; }
+}

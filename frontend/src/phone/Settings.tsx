@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, Check, UserPlus } from 'lucide-react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { act } from '../api';
 import { token } from '../api/auth';
 import { http } from '../api/http';
 import { phoneProfiles, rememberProfile, selectProfile, type PhoneProfile } from '../api/profiles';
-import { Wordmark } from '../components/ui';
 import { ScreenshotsStep } from './onboarding';
 
 export function PhoneSettings() {
+  const { state } = useLocation();
+  const from = typeof state?.from === 'string' && state.from.startsWith('/phone/') && state.from !== '/phone/settings' ? state.from : '/phone/lobby';
   const [name, setName] = useState('');
   const [profiles, setProfiles] = useState<PhoneProfile[]>([]);
   const [feed, setFeed] = useState<string | null>(null);
@@ -60,7 +61,10 @@ export function PhoneSettings() {
     } catch { setError('Couldn’t switch profiles. Try again.'); setBusy(false); }
   }
 
-  const top = <header className="ps-top"><Wordmark /></header>;
+  const top = <header className="ps-top">
+    {editing ? <button className="back-link" disabled={busy} onClick={() => { choose([]); setEditing(false); setError(''); }}><ArrowLeft aria-hidden="true" />Back to settings</button>
+      : <Link className="back-link" to={from}><ArrowLeft aria-hidden="true" />Back to movie night</Link>}
+  </header>;
   if (editing) return <ScreenshotsStep top={top} shots={shots} accept="image/jpeg,image/png,image/webp"
     onAdd={(added) => {
       if (busy) return;
@@ -110,6 +114,6 @@ export function PhoneSettings() {
       </ul>
       <button className="btn btn-ghost" disabled={loading || busy} onClick={() => void switchTo()}><UserPlus aria-hidden="true" />Use another profile</button>
     </section>
-    <div className="ps-foot"><Link className="btn btn-ghost" to="/phone/lobby"><ArrowLeft aria-hidden="true" />Back to movie night</Link></div>
+
   </section>;
 }

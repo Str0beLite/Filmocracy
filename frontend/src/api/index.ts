@@ -271,6 +271,11 @@ function applyState(st: BackendState) {
     direct();
   } else {
     stage = { ...LOBBY, ...st.stage };
+    const current = st.voting_rounds.find((round) => round.id === stage.roundId);
+    // Closing a vote opens the next backend round before the host chooses to continue.
+    if (current?.closed_at && ['trailer', 'vote', 'reveal'].includes(stage.phase) && verdict(current) === 'buzzer') {
+      stage = { ...stage, phase: 'result', outcome: 'buzzer' };
+    }
     if (stage.nextInvite) void followNewNight(stage.nextInvite);
   }
   emit(toSnapshot(st, stage));
@@ -456,7 +461,7 @@ function direct() {
       publish({ ...stage, phase: 'result', revealAt: now });
       break;
     case 'result':
-      if (now >= stage.revealAt! + MISS_MS) void next();
+      if (stage.outcome !== 'buzzer' && now >= stage.revealAt! + MISS_MS) void next();
       break;
   }
 }

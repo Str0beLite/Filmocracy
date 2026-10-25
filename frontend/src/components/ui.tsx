@@ -48,7 +48,7 @@ export function ActionButton({
 export function Wordmark({ className = '' }: { className?: string }) {
   return (
     <span className={`wordmark ${className}`}>
-      <span className="wordmark-mark" aria-hidden="true" />
+      <img className="wordmark-mark" src="/logo.svg" alt="" width={108} height={86} />
       filmocracy
     </span>
   );

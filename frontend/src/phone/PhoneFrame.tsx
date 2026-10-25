@@ -47,8 +47,8 @@ export function PhoneFrame() {
   );
   return (
     <PhoneStore>
-      <main className="phone" ref={scope}>
-        <Link className="phone-settings-link" to="/phone/settings" aria-label="Profile settings"><Settings aria-hidden="true" /></Link>
+      <main className={`phone ${pathname === '/phone/settings' ? '' : 'phone-with-settings'}`} ref={scope}>
+        {pathname !== '/phone/settings' && <Link className="phone-settings-link" to="/phone/settings" state={{ from: pathname }} aria-label="Profile settings"><Settings aria-hidden="true" /></Link>}
         <Follow>
           <Outlet />
         </Follow>
