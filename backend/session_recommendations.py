@@ -174,43 +174,19 @@ class SessionRecommendations:
                 feeds = [(feed, feeling) for feed, feeling in feeds if feed]
                 if not feeds:
                     raise HTTPException(409, "At least one connected voter needs a feed")
-                candidates = [row for row in self.sessions.metadata() if row["id"] not in shown]
-                semaphore = asyncio.Semaphore(6)
-
-                async def check(row):
-                    async with semaphore:
-                        return await self.playable(row)
-
-                tasks = [asyncio.create_task(check(row)) for row in candidates]
-                try:
-                    available = await asyncio.gather(*tasks)
-                finally:
-                    for task in tasks:
-                        task.cancel()
-                    await asyncio.gather(*tasks, return_exceptions=True)
+                # Every catalog film is a candidate; the TV looks its trailer up live by tmdb_id.
                 cat = self.state["catalog"]
-                eligible = {
-                    cat.id_to_idx[row["id"]]: row["id"]
-                    for row, ok in zip(candidates, available)
-                    if ok
-                }
-                if not eligible:
-                    raise HTTPException(
-                        409, "No unshown, verified playable catalog matches available"
-                    )
+                exclude = {cat.id_to_idx[m] for m in shown if m in cat.id_to_idx}
+                if len(exclude) >= len(cat.movies):
+                    raise HTTPException(409, "Every catalog film has been shown")
                 await asyncio.to_thread(self.sync_votes)  # this round's votes steer the next films
                 scores = await asyncio.to_thread(self.scores, feeds)
                 if not np.isfinite(scores).all():
                     raise ValueError("Non-finite recommendation scores")
-                items = pick(scores, exclude=set(range(len(scores))) - eligible.keys())[: config.SESSION_BATCH]
-                predictions = {str(eligible[idx]): float(scores[idx]) for idx in eligible}
-                return await asyncio.to_thread(
-                    self.sessions.enqueue,
-                    sid,
-                    user,
-                    [eligible[item["idx"]] for item in items],
-                    predictions,
-                )
+                items = pick(scores, exclude=exclude)[: config.SESSION_BATCH]
+                ids = [cat.movies[it["idx"]]["id"] for it in items]
+                predictions = {str(m): float(scores[it["idx"]]) for m, it in zip(ids, items)}
+                return await asyncio.to_thread(self.sessions.enqueue, sid, user, ids, predictions)
             except HTTPException:
                 raise
             except Exception:
@@ -241,29 +217,19 @@ class SessionRecommendations:
             scores = boost(scores, cat.movies, boost_tags)
             if not np.isfinite(scores).all():
                 raise HTTPException(503, "Recommendations unavailable; try again")
-            rows = {r["id"]: r for r in await asyncio.to_thread(self.sessions.metadata)}
-            for idx in np.argsort(-scores):
-                idx = int(idx)
-                row = rows.get(cat.movies[idx]["id"])
-                if idx in excluded or row is None:
-                    continue
-                try:
-                    if not await self.playable(row):
-                        continue
-                except HTTPException:
-                    raise
-                except Exception:
-                    raise HTTPException(503, "Trailer checks unavailable; try again")
-                ids = await asyncio.to_thread(
-                    self.store.add_recs, fid, [{"idx": idx, "rank": 1, "explore": False}], version
-                )
-                return {
-                    "rec_id": ids[0],
-                    "score": float(scores[idx]),
-                    "w_version": version,
-                    "movie": {**row, **cat.public(idx), "trailer_key": youtube_id(row)},
-                }
-            raise HTTPException(409, "You have watched all available verified trailers")
+            items = pick(scores, exclude=excluded)[:1]
+            if not items:
+                raise HTTPException(409, "You have rated every catalog film")
+            idx = items[0]["idx"]
+            # Stored metadata only for the films that have it; otherwise the page finds the trailer live by tmdb_id.
+            row = next((r for r in await asyncio.to_thread(self.sessions.metadata) if r["id"] == cat.movies[idx]["id"]), {})
+            ids = await asyncio.to_thread(self.store.add_recs, fid, items, version)
+            return {
+                "rec_id": ids[0],
+                "score": float(scores[idx]),
+                "w_version": version,
+                "movie": {**row, **cat.public(idx), "trailer_key": youtube_id(row) if row else None},
+            }
 
     async def rankings(self, sid, user):
         state = await asyncio.to_thread(self.sessions.snapshot, sid, user)

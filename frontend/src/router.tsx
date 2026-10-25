@@ -51,6 +51,7 @@ export const router = createBrowserRouter([
       { path: 'buzzer/:n', element: <Phone.PhoneBuzzer /> },
       { path: 'picks', element: <Phone.PhonePicks /> },
       { path: 'showing/:id?', element: <Phone.PhoneShowing /> },
+      { path: 'ended', element: <Phone.PhoneEnded /> },
     ],
   },
   { path: '*', loader: () => redirect('/') },

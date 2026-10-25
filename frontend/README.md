@@ -29,7 +29,7 @@ Sign-in is a random user id each browser keeps (`src/api/auth.ts`). Put `VITE_DE
 
 Dev-only controls on the right edge: the TV's fast-forward ends the trailer, then closes voting as it stands, then moves on; the phone's leave button leaves the session.
 
-**Trailers:** the backend only queues films whose YouTube trailer it has checked, and the TV plays that trailer to the end, then opens voting. `VITE_TMDB_TOKEN` is a fallback lookup by `tmdb_id` (`src/api/tmdb.ts`).
+**Trailers:** the backend queues from the whole catalog (about 10,000 films) and the screens find each trailer live from TMDB by `tmdb_id` (`src/api/tmdb.ts`, needs `VITE_TMDB_TOKEN`). The ~200 films with stored metadata use their stored trailer. The TV plays the trailer to the end, then opens voting.
 
 Other commands: `npm run build` (type-check + production build), `npm run lint`, `npm run preview`.
 
@@ -45,6 +45,8 @@ Other commands: `npm run build` (type-check + production build), `npm run lint`,
 | `/tv/checkpoint/:n`: every 5 trailers without a buzzer; picks or keep watching | `/phone/checkpoint/:n` |
 | `/tv/picks`: top 3 + 5 more, Start #1 | `/phone/picks` |
 | `/tv/showing/:id`, then New night, same crew | `/phone/showing/:id` |
+
+**End night** (bottom-left of the big screen) ends the session for everyone: phones show “That’s a wrap” and the TV opens a fresh lobby with a new QR code.
 
 The person icon at the top of the phone opens `/phone/account` (outside the room's flow): update the Explore page, add or remove favourite films, log out, or delete the account. With no password, logging out loses that account for good.
 

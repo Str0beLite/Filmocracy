@@ -289,11 +289,10 @@ def movies(
 
 @router.get("/session-catalog")
 def catalog(request: Request, user=Depends(current_user)):
+    """Every film the queue can pick: catalog id, tmdb_id, title, year, tags, plus stored metadata where we have it."""
     cat = request.app.state.tandem["catalog"]
-    return [
-        {**cat.public(cat.id_to_idx[row["id"]]), **row}
-        for row in request.app.state.sessions.metadata()
-    ]
+    extra = {row["id"]: row for row in request.app.state.sessions.metadata()}
+    return [{**cat.public(i), **extra.get(m["id"], {})} for i, m in enumerate(cat.movies)]
 
 
 async def session_events(sessions, sid, user, request, interval=1):

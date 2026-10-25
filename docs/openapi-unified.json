@@ -1892,6 +1892,7 @@
     },
     "/session-catalog": {
       "get": {
+        "description": "Every film the queue can pick: catalog id, tmdb_id, title, year, tags, plus stored metadata where we have it.",
         "operationId": "catalog_session_catalog_get",
         "parameters": [
           {

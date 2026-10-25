@@ -61,25 +61,15 @@ def test_training_accepts_one_to_three_images_and_authenticated_owner(
         assert sessions.post(c, "/training/feeds/missing/next", "a", json={}).status_code == 404
 
 
-def test_training_votes_playable_selection_no_repeats_and_restart(training_setup, monkeypatch):
+def test_training_votes_selection_no_repeats_and_restart(training_setup, monkeypatch):
     factory, store, _ = training_setup
     muse(monkeypatch)
     with TestClient(factory()) as c:
         fid = sessions.post(c, "/training/feeds", "a", files=shots()).json()["feed_id"]
-        app = c.app
-        calls = []
-
-        async def playable(row):
-            calls.append(row["id"])
-            return row["id"] != 51
-
-        app.state.integration.playable = playable
         path = f"/training/feeds/{fid}/next"
         first = sessions.post(c, path, "a", json={"boost": ["tag 1"]}).json()
         assert isinstance(first["score"], float)
-        assert first["movie"]["id"] != 51
-        assert first["movie"]["trailer_key"] == "abcdefghijk"
-        assert first["movie"]["id"] in calls
+        assert first["movie"]["trailer_key"] == "abcdefghijk"  # stored metadata when a film has it
         assert sessions.post(c, "/feedback", "b", json={"rec_id": first["rec_id"], "label": "love"}).status_code == 404
         assert sessions.post(c, "/feedback", "a", json={"rec_id": first["rec_id"], "label": "love"}).status_code == 200
         # Retrying an accepted vote leaves one label for this feed/movie.
@@ -87,21 +77,12 @@ def test_training_votes_playable_selection_no_repeats_and_restart(training_setup
         assert store.count_events() == 1
         assert store.events()[0]["feed_id"] == fid
         assert store.events()[0]["label"] == "love"
-
-        async def unavailable(row):
-            raise RuntimeError("provider unavailable")
-
-        app.state.integration.playable = unavailable
-        assert sessions.post(c, path, "a", json={}).status_code == 503
-        assert store.count_events() == 1
-        app.state.integration.playable = playable
         with ThreadPoolExecutor(2) as pool:
             results = list(pool.map(lambda _: sessions.post(c, path, "a", json={}).json(), range(2)))
         seen = {first["movie"]["id"], *(r["movie"]["id"] for r in results)}
         assert len(seen) == 3
         assert store._all("SELECT count(*) n FROM tandem_sessions")[0]["n"] == 0
     with TestClient(factory()) as c:
-        c.app.state.integration.playable = playable
         for _ in range(20):
             response = sessions.post(c, path, "a", json={})
             if response.status_code == 409:
@@ -111,7 +92,7 @@ def test_training_votes_playable_selection_no_repeats_and_restart(training_setup
             assert mid not in seen
             seen.add(mid)
         assert response.status_code == 409
-        assert len(seen) == 14  # one deliberately unplayable catalog movie
+        assert len(seen) == 15  # every catalog film, trailer stored or not
         assert store.count_events() == 1
 
 
