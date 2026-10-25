@@ -46,9 +46,11 @@ Centring on $\mu$, the "average film", removes what every film shares, so cosine
 
 **Translate and score (pieces C + B).**
 
-$$\hat y = \operatorname{normalize}(W x), \qquad W = I + AB^\top,\ A, B \in \mathbb{R}^{384 \times 8}, \qquad \text{score}(m) = \hat y \cdot t_m$$
+$$\hat y = \operatorname{normalize}(W x), \qquad W = I + AB^\top,\ A, B \in \mathbb{R}^{384 \times 8}, \qquad \text{score}(m) = \hat y \cdot t_m + p\,\pi_m$$
 
-$A$ starts at 0, so on day 0 $W = I$ and tags match purely by meaning. Training only ever moves the low-rank part (~6k numbers).
+$A$ starts at 0, so on day 0 $W = I$ and tags match purely by meaning. $\pi_m$ is the film's popularity prior (its rating-count rank percentile, squared; `Catalog.prior`) and $p$ is one learned number starting at `POP_INIT = 0.05`, so W doesn't spend rank on "people like hits". Training only ever moves $A$, $B$ and $p$ (~6k numbers).
+
+**Live vote pull (serving only).** Before W retrains, each feed's votes so far already move its recs: $\hat y \leftarrow \operatorname{normalize}\big(\hat y + 0.1 \min(n, 10)\,(\overline{t}_{P} - 0.5\,\overline{t}_{N})\big)$, where $n$ is the number of votes (`VOTE_PULL`). The group list uses every member's votes. Training still uses the raw $x$.
 
 **Training loss (piece C).** For each user $u$ with loved films $P_u$ and passed films $N_u$:
 

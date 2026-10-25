@@ -17,8 +17,8 @@ from tandem.api import create_app
 from tandem.auth import current_user
 from tandem.catalog import Catalog
 from tandem.encoder import bag
-from tandem.model import Translator, state
-from tandem.recommend import boost
+from tandem.model import Translator, from_state, loss_fn, state
+from tandem.recommend import boost, score_feed
 from tandem.store import Store
 from tandem.trainer import Trainer
 
@@ -265,3 +265,38 @@ def test_summarize_sums_up_the_feed_and_falls_back_to_the_average(monkeypatch):
     monkeypatch.setattr(vision, "_ask", broken_ask)
     tags, dropped = asyncio.run(vision.summarize(readings))
     assert dropped == 1 and tags == pytest.approx({"curious": 0.6, "college football": 0.45})
+
+
+def test_votes_pull_the_next_recs_before_any_retrain():
+    cat = make_catalog()
+    model = Translator(cat.w0).eval()
+    x = cat.feed_vector({"dark comedy": 1.0})
+    target = [i for i, m in enumerate(cat.movies) if m["title"].startswith("Underdog")]
+    rank = lambda s, i: int((s > s[i]).sum())
+    before = score_feed(model, x, cat.vecs)
+    after = score_feed(model, x, cat.vecs, pos=set(target[:3]))
+    # the unvoted underdog films climb because they share tags with the loved ones
+    assert all(rank(after, i) < rank(before, i) for i in target[3:])
+
+
+def test_popularity_weight_is_learned_and_old_checkpoints_still_load():
+    cat = make_catalog()
+    for i, m in enumerate(cat.movies):
+        m["popularity"] = i
+    cat = Catalog(cat.movies, cat.raw)
+    prior = torch.from_numpy(cat.prior)
+    rng = random.Random(0)
+    hits = list(range(len(cat.movies) - 20, len(cat.movies)))   # every user loves the most-rated films, whatever their feed
+    feeds = {f"f{u}": {"x": torch.from_numpy(cat.feed_vector({rng.choice(FILLER_TAGS): 1.0})),
+                       "pos": set(rng.sample(hits, 3)), "neg": set()} for u in range(20)}
+    examples = [(fid, j) for fid, f in feeds.items() for j in f["pos"]]
+    m = Translator(cat.w0)
+    opt = torch.optim.Adam(m.parameters(), lr=1e-2)
+    for _ in range(50):
+        opt.zero_grad()
+        loss_fn(m, feeds, examples, torch.from_numpy(cat.vecs), prior=prior).backward()
+        opt.step()
+    assert m.pop.item() > config.POP_INIT + 0.1
+    old = from_state(cat.w0, {"A": m.A.detach(), "B": m.B.detach()})   # pre-pop checkpoint
+    assert old.pop.item() == pytest.approx(config.POP_INIT)
+    assert from_state(cat.w0, state(m)).pop.item() == pytest.approx(m.pop.item())

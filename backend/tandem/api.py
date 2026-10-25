@@ -52,10 +52,10 @@ def create_app(catalog=None, store=None, start_trainer=True):
         return f
 
     def _recs(f, boost_tags=(), exclude=()):
-        """10 recs for one feed's x, logged under that feed so feedback and exploration work as usual."""
+        """10 recs for one feed's x (pulled toward its votes so far), logged under that feed so feedback and exploration work as usual."""
         cat, store = state["catalog"], state["store"]
         v, model = state["trainer"].current()
-        s = boost(score_feed(model, f["x"], cat.vecs), cat.movies, boost_tags)
+        s = boost(score_feed(model, f["x"], cat.vecs, cat.prior, *store.votes(f["id"])), cat.movies, boost_tags)
         items = pick(s, exclude=store.rated_movies(f["id"]) | set(exclude))
         ids = store.add_recs(f["id"], items, v)
         return v, [{"rec_id": rec_id, **cat.public(it["idx"]), "score": float(s[it["idx"]]),
@@ -110,9 +110,7 @@ def create_app(catalog=None, store=None, start_trainer=True):
                      user: str = Depends(current_user)):
             f, cat = _feed(fid, user), state["catalog"]
             model = Translator(cat.w0).eval()   # A = 0, so W = W0 = I
-            counts = np.array([m.get("popularity", 0) for m in cat.movies])
-            pct = counts.argsort().argsort() / (len(counts) - 1)   # 0 = least rated film, 1 = most rated
-            s = score_feed(model, f["x"], cat.vecs) + pop * pct ** 2
+            s = score_feed(model, f["x"], cat.vecs) + pop * cat.prior
             return {"w_version": "identity", "pop": pop,
                     "recs": [{**cat.public(int(i)), "score": float(s[i]),
                               "because_of": because_of(model, f["tags"], cat.vecs[i])} for i in np.argsort(-s)[:k]]}
@@ -210,7 +208,9 @@ def create_app(catalog=None, store=None, start_trainer=True):
         for uid, f in g["members"].items():
             v, users[uid] = _recs(f, body.boost, exclude)
         v, model = state["trainer"].current()
-        s = boost(score_feed(model, g["avg_x"], cat.vecs), cat.movies, body.boost)
+        votes = [state["store"].votes(f["id"]) for f in g["members"].values()]   # everyone's votes pull the group list
+        pos, neg = set().union(*(p for p, _ in votes)), set().union(*(n for _, n in votes))
+        s = boost(score_feed(model, g["avg_x"], cat.vecs, cat.prior, pos, neg), cat.movies, body.boost)
         group = [{"rec_id": None, **cat.public(it["idx"]), "score": float(s[it["idx"]]), "because_of": []}
                  for it in pick(s, exclude=exclude)]  # not logged: there is no feed to log it under
         return {"group_id": gid, "w_version": v, "users": users, "group": group}

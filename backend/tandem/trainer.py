@@ -18,6 +18,7 @@ class Trainer:
         self.store = store
         self.movies = torch.from_numpy(catalog.vecs)
         self.w0 = catalog.w0
+        self.prior = torch.from_numpy(catalog.prior)
         self.version = 0
         self.model = Translator(self.w0)     # version 0 = W0 = identity, no training yet
         self.model.eval()
@@ -101,13 +102,13 @@ class Trainer:
             t0 = time.time()
             for _ in range(steps):
                 opt.zero_grad()
-                loss = loss_fn(cand, feeds, train, self.movies)
+                loss = loss_fn(cand, feeds, train, self.movies, prior=self.prior)
                 loss.backward()
                 opt.step()
             cand.eval()
 
-            r_new = recall_at_k(cand, feeds, holdout, self.movies)
-            r_old = recall_at_k(self.model, feeds, holdout, self.movies)
+            r_new = recall_at_k(cand, feeds, holdout, self.movies, prior=self.prior)
+            r_old = recall_at_k(self.model, feeds, holdout, self.movies, prior=self.prior)
             accepted = r_new is None or r_new >= r_old
 
             version = max([m["version"] for m in self.store.models()] + [self.version]) + 1
