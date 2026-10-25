@@ -50,7 +50,7 @@ test('saved profiles restore their own credential without retaining room votes',
   assert.throws(() => selectProfile('unknown'));
 });
 
-for (const outcome of ['miss', 'buzzer']) test(`a ${outcome} verdict appears immediately and ${outcome === 'buzzer' ? 'waits for the host' : 'advances after two seconds'}`, async () => {
+for (const { outcome, round } of [{ outcome: 'miss', round: 1 }, { outcome: 'buzzer', round: 5 }, { outcome: 'checkpoint', round: 5 }, { outcome: 'checkpoint', round: 10 }]) test(`round ${round}: ${outcome} ${outcome !== 'miss' ? 'waits for the host' : 'advances after two seconds'}`, async () => {
   globalThis.localStorage = storage(); globalThis.sessionStorage = storage();
   globalThis.location = { pathname: '/tv', href: 'http://localhost/tv' };
   let tick; let ws; let now = 100000;
@@ -63,14 +63,14 @@ for (const outcome of ['miss', 'buzzer']) test(`a ${outcome} verdict appears imm
   };
   globalThis.fetch = async (url) => ({ ok: true, json: async () => url.endsWith('/session-catalog') ? [] : url.endsWith('/sessions') ? { session_id: 'room', invite_token: 'invite' } : {} });
   try {
-    const api = await import(`${await browserModule('src/api/index.ts')}#${outcome}`);
+    const api = await import(`${await browserModule('src/api/index.ts')}#${outcome}-${round}`);
     const snapshots = [];
     api.connect((s) => snapshots.push(s), () => {});
     await new Promise((done) => setTimeout(done, 10));
     const state = {
       session: { id: 'room', host_user_id: 'tv', status: 'active' }, profiles: [], session_members: [], session_movies: [], votes: [], member_state: [], session_feeds: [], reactions: [],
       server_now: new Date(now).toISOString(),
-      stage: { phase: 'trailer', round: 1, roundId: 'first', movieId: 1, shown: [], trailerMs: 12000, trailerStartedAt: now },
+      stage: { phase: 'trailer', round, roundId: 'first', movieId: 1, shown: [], trailerMs: 12000, trailerStartedAt: now },
       voting_rounds: [{ id: 'first', movie_id: 1, closed_at: null, close_reason: null }],
     };
     ws.onmessage({ data: JSON.stringify({ type: 'state', state }) });
@@ -83,7 +83,7 @@ for (const outcome of ['miss', 'buzzer']) test(`a ${outcome} verdict appears imm
     assert.equal(snapshots.at(-1).outcome, outcome);
     now += 1999; tick(); assert.equal(snapshots.at(-1).phase, 'result');
     now += 1; tick();
-    if (outcome === 'buzzer') {
+    if (outcome !== 'miss') {
       assert.equal(snapshots.at(-1).phase, 'result');
       now += 60000; tick();
       assert.equal(snapshots.at(-1).phase, 'result');
@@ -91,6 +91,7 @@ for (const outcome of ['miss', 'buzzer']) test(`a ${outcome} verdict appears imm
     }
     assert.equal(snapshots.at(-1).phase, 'trailer');
     assert.equal(snapshots.at(-1).movieId, 2);
+    assert.equal(snapshots.at(-1).round, round + 1);
   } finally { Date.now = originalNow; globalThis.setInterval = originalInterval; }
 });
 

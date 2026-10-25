@@ -84,4 +84,4 @@ Open `/training` for a name, a feeling, one to three Explore screenshots, then t
 
 The phone’s gear button opens `/phone/settings`. Named profiles stay in this browser and can be switched there; these are local profiles, not Google accounts or cross-device sign-in. Each room join asks for a fresh feeling, then reuses the profile’s latest saved taste. Profiles without a saved taste upload screenshots once. Settings accepts replacement screenshots; the updated taste applies the next time that profile joins a room, preserving the active night’s feed and vote history.
 
-Verdicts appear as soon as the round closes. Misses advance after two seconds; golden buzzers stay on screen until the host chooses picks or keeps browsing. There is no suspense reveal or checkpoint pause in this flow.
+Verdicts appear as soon as the round closes. Misses advance after two seconds; golden buzzers stay on screen until the host chooses picks or keeps browsing. Every five trailers without a golden buzzer, a checkpoint waits for the host to choose “Keep watching” or “See our picks”. There is no suspense reveal delay.

@@ -11,7 +11,7 @@ import { device, token } from './auth';
 import { API, ApiError, http } from './http';
 import { formatRuntime, tmdbDetails } from './tmdb';
 import { COLORS, EMOTES, FEELINGS, art } from './data';
-import { MISS_MS, TRAILER_GRACE_MS, TRAILER_MS, VOTE_TIMEOUT_MS } from './rules';
+import { MISS_MS, TRAILER_GRACE_MS, TRAILER_MS, VOTE_TIMEOUT_MS, isCheckpoint } from './rules';
 import type { Movie, Outcome, Phase, PickSource, Reaction, Snapshot } from './types';
 
 export type * from './types';
@@ -449,7 +449,7 @@ function trailerFor(round: { id: string; movie_id: number }): Stage {
 function verdict(round: { id: string; close_reason: string | null }): Outcome {
   const votes = state!.votes.filter((v) => v.round_id === round.id);
   const everyoneIn = round.close_reason === 'completed' && votes.length > 0 && votes.every((v) => v.value === 1);
-  return everyoneIn ? 'buzzer' : 'miss';
+  return everyoneIn ? 'buzzer' : isCheckpoint(stage.round) ? 'checkpoint' : 'miss';
 }
 
 const openRound = () => state?.voting_rounds.find((r) => !r.closed_at && r.id !== stage.roundId);
@@ -484,7 +484,7 @@ function direct() {
       publish({ ...stage, phase: 'result', revealAt: now });
       break;
     case 'result':
-      if (stage.outcome !== 'buzzer' && now >= stage.revealAt! + MISS_MS) void next();
+      if (stage.outcome === 'miss' && now >= stage.revealAt! + MISS_MS) void next();
       break;
   }
 }
