@@ -236,7 +236,31 @@ function toSnapshot(st: BackendState, sg: Stage): Snapshot {
   };
 }
 
+// Never show a film before its details are in: if the backend queued one this page hasn't loaded
+// (it was redeployed with a bigger catalog), fetch the catalog again, then show the newest state.
+let latest: BackendState | null = null;
+let refetching = false;
+const refetched = new Set<number>(); // ids we already refetched for, so an unknown id can't loop
 function onState(st: BackendState) {
+  latest = st;
+  if (refetching) return;
+  const missing = st.session_movies.map((m) => m.movie_id).filter((id) => !movies.has(id) && !refetched.has(id));
+  if (missing.length) {
+    missing.forEach((id) => refetched.add(id));
+    refetching = true;
+    catalog = null;
+    void loadCatalog()
+      .catch(() => {})
+      .finally(() => {
+        refetching = false;
+        onState(latest!);
+      });
+    return;
+  }
+  applyState(st);
+}
+
+function applyState(st: BackendState) {
   const fresh = state?.session.id !== st.session.id;
   state = st;
   offset = Date.parse(st.server_now) - Date.now();
