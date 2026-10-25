@@ -1,15 +1,25 @@
-// The 16:9 big screen around every TV route, with curtains that part when the
-// show starts and a cut from black between screens.
+// The 16:9 big screen around every TV route. It follows the room: whenever
+// the night moves on, it navigates to the matching screen. Curtains part when
+// the show starts; every screen change cuts in from black.
 
-import { useRef } from 'react';
-import { Outlet, useLocation } from 'react-router';
+import { useEffect, useRef } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router';
 import { gsap, useMotion } from '../lib/motion';
+import { tvPath } from '../lib/flow';
+import { useRoom } from '../room/useRoom';
 import { DevBar } from '../dev/DevBar';
 
 export function TVFrame() {
+  const { s } = useRoom();
   const { pathname } = useLocation();
-  const open = !pathname.startsWith('/tv/lobby');
+  const navigate = useNavigate();
+  const want = tvPath(s);
+  const open = s.phase !== 'lobby';
   const screen = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (pathname !== want) navigate(want, { replace: true });
+  }, [pathname, want, navigate]);
 
   useMotion(
     () => {
@@ -22,14 +32,14 @@ export function TVFrame() {
   return (
     <main className="tv">
       <div className="tv-screen" ref={screen}>
-        <Outlet />
+        {pathname === want && <Outlet />}
         <div className={`curtains ${open ? 'is-open' : ''}`} aria-hidden="true">
           <div className="curtain curtain--left" />
           <div className="curtain curtain--right" />
           <div className="valance" />
         </div>
       </div>
-      <DevBar />
+      <DevBar device="tv" />
     </main>
   );
 }

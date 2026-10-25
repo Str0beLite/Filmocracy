@@ -1,59 +1,56 @@
-// The one place screens get data from. Today it reads mock.ts; wiring the
-// backend means swapping these bodies for fetches (backend/README.md, "API")
-// plus TMDB lookups by tmdb_id. Screens don't change.
+// The one place screens talk to the backend. Today that's the fake backend in
+// mock-backend/ (served by the Vite dev server); the real session service
+// should speak the same protocol: a stream of Snapshots plus POSTed actions.
+// Movie details come from mock.ts until TMDB is wired in by tmdb_id.
 
-import { DETAILS, EMOTES, FEELINGS, ME_ID, MY_FEED_TAGS, OUTCOMES, PEOPLE, PREDICTED, ROOM, TRAILERS } from './mock';
-import type { Movie, Picks, Rec, Room, Round } from './types';
+import { CATALOG, DETAILS, EMOTES, FEELINGS } from './mock';
+import type { Movie, Snapshot } from './types';
 
 export type * from './types';
-export { EMOTES, FEELINGS, ME_ID };
+export * from './rules';
+export { EMOTES, FEELINGS };
+
+const BASE = '/mock-api';
 
 // Backend scores run ~0 (median) to ~0.3 (top); this is a display scale only.
 const toMatch = (score: number) => Math.min(99, Math.round(50 + score * 160));
 
-function toMovie(r: Rec): Movie {
-  const { why, ...details } = DETAILS[r.id];
-  return {
-    ...details,
-    id: r.id,
-    tmdbId: r.tmdb_id,
-    title: r.title,
-    year: r.year,
-    match: toMatch(r.score),
-    wildcard: Boolean(r.explore),
-    why,
+const movies = new Map<number, Movie>(
+  CATALOG.map((r) => [
+    r.id,
+    {
+      ...DETAILS[r.id],
+      id: r.id,
+      tmdbId: r.tmdb_id,
+      title: r.title,
+      year: r.year,
+      tags: r.tags,
+      match: toMatch(r.score),
+      wildcard: Boolean(r.explore),
+    },
+  ]),
+);
+
+export const movie = (id: number) => movies.get(id)!;
+
+// Live room updates. Reconnects on its own (EventSource does) when a phone
+// wakes up or the Wi-Fi blips.
+export function connect(onSnapshot: (s: Snapshot) => void, onStatus: (online: boolean) => void) {
+  const es = new EventSource(`${BASE}/events`);
+  es.onmessage = (e) => {
+    onStatus(true);
+    onSnapshot(JSON.parse(e.data));
   };
+  es.onerror = () => onStatus(false);
+  return () => es.close();
 }
 
-export async function getRoom(): Promise<Room> {
-  return { ...ROOM, people: PEOPLE };
-}
-
-export async function getRound(n: number): Promise<Round> {
-  const i = (Math.max(1, n) - 1) % TRAILERS.length;
-  return { n, movie: toMovie(TRAILERS[i]), outcome: OUTCOMES[i] };
-}
-
-export async function getRounds(from: number, to: number): Promise<Round[]> {
-  const ns = Array.from({ length: to - from + 1 }, (_, k) => from + k);
-  return Promise.all(ns.map(getRound));
-}
-
-// Golden buzzers first, then the trailers people liked, then predictions.
-export async function getPicks(): Promise<Picks> {
-  const movies = [...TRAILERS, ...PREDICTED].map(toMovie);
-  const byId = (id: number) => movies.find((m) => m.id === id)!;
-  return {
-    top: [
-      { movie: byId(195159), source: 'buzzer' },
-      { movie: byId(152970), source: 'trailers' },
-      { movie: byId(164179), source: 'predicted' },
-    ],
-    more: PREDICTED.slice(1).map(toMovie),
-  };
-}
-
-// POST /feeds returns the tags it read from the screenshots.
-export async function getMyFeedTags(): Promise<string[]> {
-  return MY_FEED_TAGS;
+export async function act<T = unknown>(action: string, body: Record<string, unknown> = {}): Promise<T> {
+  const res = await fetch(`${BASE}/${action}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? `${action} failed`);
+  return res.json();
 }

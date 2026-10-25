@@ -1,6 +1,7 @@
 import { networkInterfaces } from 'node:os';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { mockBackend } from './mock-backend';
 
 const PORT = 5173;
 
@@ -18,7 +19,7 @@ function lanOrigin() {
 }
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), mockBackend()],
   define: { __LAN_ORIGIN__: JSON.stringify(lanOrigin()) },
   server: { port: PORT, strictPort: true },
 });

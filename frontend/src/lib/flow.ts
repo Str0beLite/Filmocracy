@@ -1,65 +1,48 @@
-// The natural next screen for each route. The big screen uses it to move on
-// by itself (when a trailer ends, after the verdict); the dev bar uses it
-// to step through phone screens that are waiting on the big screen.
+// Which screen each device should show for the room's current state. The
+// frames navigate there whenever the room changes, so every device moves
+// together and the URL always names the screen.
 
-import { getRound } from '../api';
-import { afterResult, isCheckpoint } from './night';
+import type { Snapshot } from '../api';
 
-export async function nextPath(path: string): Promise<string> {
-  const [, device, screen, arg] = path.split('/');
-  const n = Number(arg) || 1;
+function resultPath(device: 'tv' | 'phone', s: Snapshot) {
+  return `/${device}/${s.outcome ?? 'miss'}/${s.round}`;
+}
 
-  if (device === 'tv') {
-    switch (screen) {
-      case 'lobby':
-        return '/tv/trailer/1';
-      case 'trailer':
-        return `/tv/vote/${n}`;
-      case 'vote':
-        return `/tv/reveal/${n}`;
-      case 'reveal':
-        return afterResult(n, (await getRound(n)).outcome);
-      case 'miss':
-      case 'checkpoint':
-        return `/tv/trailer/${n + 1}`;
-      case 'buzzer':
-        return '/tv/picks';
-      case 'picks':
-        return '/tv/showing';
-      default:
-        return '/tv/lobby';
-    }
-  }
-
-  switch (screen) {
-    case 'join':
-      return '/phone/sign-in';
-    case 'sign-in':
-      return '/phone/feeling';
-    case 'feeling':
-      return '/phone/screenshots';
-    case 'screenshots':
-      return '/phone/reading';
-    case 'reading':
-      return '/phone/lobby';
+export function tvPath(s: Snapshot): string {
+  switch (s.phase) {
     case 'lobby':
-      return '/phone/react/1';
-    case 'react':
-      return `/phone/vote/${n}`;
+      return '/tv/lobby';
+    case 'trailer':
     case 'vote':
-      return `/phone/voted/${n}`;
-    case 'voted': {
-      if ((await getRound(n)).outcome === 'buzzer') return `/phone/buzzer/${n}`;
-      return isCheckpoint(n) ? `/phone/checkpoint/${n}` : `/phone/miss/${n}`;
-    }
-    case 'miss':
-    case 'checkpoint':
-      return `/phone/react/${n + 1}`;
-    case 'buzzer':
-      return '/phone/picks';
+    case 'reveal':
+      return `/tv/${s.phase === 'trailer' ? 'trailer' : s.phase}/${s.round}`;
+    case 'result':
+      return resultPath('tv', s);
     case 'picks':
-      return '/phone/showing';
-    default:
-      return '/phone/join';
+      return '/tv/picks';
+    case 'showing':
+      return `/tv/showing/${s.showingId ?? ''}`;
   }
 }
+
+// Only for a phone that has taken its seat; before that it's onboarding.
+export function phonePath(s: Snapshot, me: string): string {
+  switch (s.phase) {
+    case 'lobby':
+      return '/phone/lobby';
+    case 'trailer':
+      return `/phone/react/${s.round}`;
+    case 'vote':
+      return `/phone/${s.locked.includes(me) ? 'voted' : 'vote'}/${s.round}`;
+    case 'reveal':
+      return `/phone/voted/${s.round}`;
+    case 'result':
+      return resultPath('phone', s);
+    case 'picks':
+      return '/phone/picks';
+    case 'showing':
+      return `/phone/showing/${s.showingId ?? ''}`;
+  }
+}
+
+export const ONBOARDING = ['/phone/join', '/phone/sign-in', '/phone/name', '/phone/feeling', '/phone/screenshots', '/phone/reading'];

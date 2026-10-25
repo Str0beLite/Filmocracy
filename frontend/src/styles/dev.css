@@ -143,3 +143,39 @@
   line-height: 1.45;
   color: var(--muted);
 }
+
+.dev-note {
+  margin-bottom: 12px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.dev-note a {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.dev-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-weight: 600;
+  text-align: left;
+}
+
+.dev-link:hover {
+  color: var(--gold);
+}
+
+.dev-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.dev-h2-gap {
+  margin-top: 32px;
+}

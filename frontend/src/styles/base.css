@@ -337,19 +337,18 @@ a {
   color: var(--gold);
 }
 
-.seat.is-away .seat-back,
-.seat.is-away .seat-cushion {
+.seat.is-joining .seat-back,
+.seat.is-joining .seat-cushion {
   border: 0.16em dashed var(--line-strong);
   background: transparent;
   box-shadow: none;
 }
 
-.seat.is-away .avatar {
-  opacity: 0.3;
-  filter: grayscale(1);
+.seat.is-joining .avatar {
+  animation: joining 1.4s ease-in-out infinite;
 }
 
-.seat.is-away .seat-name {
+.seat.is-joining .seat-name {
   color: var(--muted);
 }
 
@@ -570,6 +569,12 @@ a {
   }
 }
 
+@keyframes joining {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 @keyframes dot {
   0%,
   60%,
@@ -638,4 +643,34 @@ a {
   .confetti {
     display: none;
   }
+}
+
+/* ---- Connection ---- */
+
+.connecting {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  min-height: 100dvh;
+  font-size: 28px;
+}
+
+.connecting p {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.offline {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 200;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 700;
+  transform: translateX(-50%);
 }

@@ -28,9 +28,9 @@ export interface Movie extends MovieDetails {
   tmdbId: number | null;
   title: string;
   year: number;
+  tags: string[];
   match: number; // 0–100, for display
   wildcard: boolean;
-  why: { who: string; tag: string }[]; // whose feed pushed it up, and which tag
 }
 
 export type FeelingId = 'laugh' | 'edge' | 'feels' | 'mindblown' | 'cozy' | 'hyped';
@@ -47,30 +47,49 @@ export interface Person {
   name: string;
   color: string;
   feeling: FeelingId | null;
+  seated: boolean; // false while they're still onboarding on their phone
 }
 
-export interface Room {
+export type Phase = 'lobby' | 'trailer' | 'vote' | 'reveal' | 'result' | 'picks' | 'showing';
+
+export type Outcome = 'buzzer' | 'miss' | 'checkpoint';
+
+export interface PickSource {
+  id: number;
+  source: 'buzzer' | 'trailers' | 'predicted';
+}
+
+export interface Reaction {
+  id: number;
+  who: string;
+  emoji: string;
+  at: number;
+}
+
+// What every screen sees. It never says how anyone voted: only who has
+// (`locked`) and whether it was unanimous (`outcome`).
+export interface Snapshot {
+  serverNow: number;
   code: string;
   name: string;
   people: Person[];
-}
-
-export type Outcome = 'buzzer' | 'miss';
-
-export interface Round {
-  n: number; // 1-based trailer number tonight
-  movie: Movie;
-  outcome: Outcome;
+  phase: Phase;
+  round: number; // 1-based trailer number tonight; 0 in the lobby
+  movieId: number | null;
+  why: { who: string; tag: string }[]; // whose feed pushed the current trailer up
+  trailerStartedAt: number | null;
+  trailerMs: number; // this trailer's length: the real video's once it plays, else TRAILER_MS
+  locked: string[];
+  outcome: Outcome | null;
+  shown: number[]; // movie ids, in the order they played
+  picks: { top: PickSource[]; more: number[] } | null;
+  showingId: number | null;
+  reactions: Reaction[];
 }
 
 export interface Pick {
   movie: Movie;
-  source: 'buzzer' | 'trailers' | 'predicted';
-}
-
-export interface Picks {
-  top: Pick[];
-  more: Movie[];
+  source: PickSource['source'];
 }
 
 export interface Emote {

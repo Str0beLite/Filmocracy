@@ -1,8 +1,8 @@
 ﻿// Phone screens. Onboarding moves on by itself; after that a phone only
-// waits, reacts and votes. The big screen moves the night forward.
+// waits, reacts and votes, and follows the big screen through the night.
 
-import { useRef, useState, type ChangeEvent } from 'react';
-import { Link, useLoaderData, useNavigate, useSearchParams } from 'react-router';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
   ArrowRight,
   Check,
@@ -19,32 +19,21 @@ import {
   Vote,
   X,
 } from 'lucide-react';
-import { EMOTES, FEELINGS, ME_ID, type Person, type Picks, type Room, type Round } from '../api';
+import { EMOTES, FEELINGS, act, movie, type Snapshot } from '../api';
 import { Avatar, Confetti, LivePill, PickSource, Poster, Seat, Wildcard, Wordmark } from '../components/ui';
 import { FEELING_ICONS } from '../lib/feelings';
-import { TRAILER_MS } from '../lib/night';
-import { gsap, useAutoAdvance, useElapsed, useMotion } from '../lib/motion';
+import { gsap, useElapsed, useMotion } from '../lib/motion';
+import { useRoom, useServerNow } from '../room/useRoom';
 import { usePhone } from './usePhone';
 
-type RoundData = { room: Room; round: Round };
+const seatedOf = (s: Snapshot) => s.people.filter((p) => p.seated);
 
-// This phone's person, with what they picked during onboarding.
-function useMe(room: Room): Person {
-  const { feeling } = usePhone();
-  const me = room.people.find((p) => p.id === ME_ID)!;
-  return { ...me, feeling: feeling ?? me.feeling };
-}
-
-function useCrew(room: Room) {
-  const me = useMe(room);
-  return room.people.map((p) => (p.id === ME_ID ? me : p));
-}
-
-function Top({ room }: { room: Room }) {
+function Top() {
+  const { s } = useRoom();
   return (
     <header className="ps-top">
       <Wordmark />
-      <LivePill>Room {room.code}</LivePill>
+      <LivePill>Room {s.code}</LivePill>
     </header>
   );
 }
@@ -65,11 +54,12 @@ function WaitingNote({ children }: { children: string }) {
 // ---- Onboarding ----
 
 export function PhoneJoin() {
-  const room = useLoaderData() as Room;
+  const { s } = useRoom();
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const scanned = params.get('room')?.toUpperCase() === room.code;
+  const scanned = params.get('room')?.toUpperCase() === s.code;
   const [code, setCode] = useState('');
+  const [wrong, setWrong] = useState(false);
   return (
     <section className="ps">
       <header className="ps-top">
@@ -77,7 +67,7 @@ export function PhoneJoin() {
       </header>
       <div className="join-hero" aria-hidden="true">
         <div className="seat-row">
-          {room.people.map((p) => (
+          {s.people.slice(0, 6).map((p) => (
             <Seat key={p.id} person={p} />
           ))}
         </div>
@@ -86,8 +76,10 @@ export function PhoneJoin() {
         <>
           <h1 className="ps-title display">You’re invited to movie night.</h1>
           <div className="join-room">
-            <b>{room.name}</b>
-            <span>Room {room.code} · on the big screen</span>
+            <b>{s.name}</b>
+            <span>
+              Room {s.code} · {seatedOf(s).length ? `${seatedOf(s).length} already seated` : 'on the big screen'}
+            </span>
           </div>
           <div className="ps-foot">
             <Link className="btn btn-primary" to="/phone/sign-in">
@@ -100,7 +92,8 @@ export function PhoneJoin() {
           style={{ display: 'contents' }}
           onSubmit={(e) => {
             e.preventDefault();
-            if (code.length === 4) navigate('/phone/sign-in');
+            if (code.toUpperCase() === s.code) navigate('/phone/sign-in');
+            else setWrong(true);
           }}
         >
           <h1 className="ps-title display">Join movie night</h1>
@@ -109,15 +102,24 @@ export function PhoneJoin() {
             Room code
             <input
               value={code}
-              onChange={(e) => setCode(e.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 4))}
+              onChange={(e) => {
+                setCode(e.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 4));
+                setWrong(false);
+              }}
               placeholder="K7Q2…"
               autoComplete="off"
               autoCapitalize="characters"
               spellCheck={false}
-              inputMode="text"
               name="room"
+              aria-invalid={wrong}
+              aria-describedby={wrong ? 'code-error' : undefined}
             />
           </label>
+          {wrong && (
+            <p className="field-error" id="code-error" role="alert">
+              No room with that code. Check the code under the QR on the big screen.
+            </p>
+          )}
           <div className="ps-foot">
             <button className="btn btn-primary" disabled={code.length !== 4}>
               Join the room <ArrowRight aria-hidden="true" />
@@ -141,10 +143,9 @@ function GoogleG() {
 }
 
 export function PhoneSignIn() {
-  const room = useLoaderData() as Room;
   return (
     <section className="ps">
-      <Top room={room} />
+      <Top />
       <h1 className="ps-title display">Sign in once, and Tandem remembers your taste.</h1>
       <ul className="promise">
         <li>
@@ -161,7 +162,8 @@ export function PhoneSignIn() {
         </li>
       </ul>
       <div className="ps-foot">
-        <Link className="btn btn-google" to="/phone/feeling">
+        {/* Real Google sign-in comes with the backend; for now it asks for a name. */}
+        <Link className="btn btn-google" to="/phone/name">
           <GoogleG /> Sign in with Google
         </Link>
       </div>
@@ -169,12 +171,69 @@ export function PhoneSignIn() {
   );
 }
 
-export function PhoneFeeling() {
-  const room = useLoaderData() as Room;
-  const { feeling, setFeeling } = usePhone();
+// Stand-in for Google sign-in (the backend's dev login is just a name).
+export function PhoneName() {
+  const { me, setMe } = usePhone();
+  const navigate = useNavigate();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   return (
     <section className="ps">
-      <Top room={room} />
+      <Top />
+      <form
+        style={{ display: 'contents' }}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (me) return navigate('/phone/feeling');
+          setBusy(true);
+          try {
+            const { id } = await act<{ id: string }>('join', { name });
+            setMe(id);
+            navigate('/phone/feeling');
+          } catch {
+            setError('Couldn’t reach the big screen. Check you’re on the same Wi-Fi, then try again.');
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <h1 className="ps-title display">What do your friends call you?</h1>
+        <p className="ps-sub">It goes on your seat on the big screen.</p>
+        <label className="field">
+          First name
+          <input
+            className="field-text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Alex…"
+            autoComplete="given-name"
+            name="name"
+            maxLength={20}
+            aria-invalid={Boolean(error)}
+          />
+        </label>
+        {error && (
+          <p className="field-error" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="ps-foot">
+          <button className="btn btn-primary" disabled={!name.trim() || busy}>
+            Take my seat <ArrowRight aria-hidden="true" />
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+export function PhoneFeeling() {
+  const { me, feeling, setFeeling } = usePhone();
+  const navigate = useNavigate();
+  return (
+    <section className="ps">
+      <Top />
       <h1 className="ps-title display">How do you want to feel tonight?</h1>
       <p className="ps-sub">Tandem blends everyone’s answer into what it picks.</p>
       <div className="feeling-grid" role="radiogroup" aria-label="Tonight’s feeling">
@@ -189,14 +248,16 @@ export function PhoneFeeling() {
         })}
       </div>
       <div className="ps-foot">
-        <Link
+        <button
           className="btn btn-primary"
-          to="/phone/screenshots"
-          aria-disabled={!feeling}
-          onClick={(e) => !feeling && e.preventDefault()}
+          disabled={!feeling}
+          onClick={() => {
+            act('feeling', { id: me, feeling });
+            navigate('/phone/screenshots');
+          }}
         >
           Continue <ArrowRight aria-hidden="true" />
-        </Link>
+        </button>
       </div>
     </section>
   );
@@ -205,7 +266,6 @@ export function PhoneFeeling() {
 const SHOTS_NEEDED = 3;
 
 export function PhoneScreenshots() {
-  const room = useLoaderData() as Room;
   const { shots, setShots } = usePhone();
   const input = useRef<HTMLInputElement>(null);
   const done = shots.length >= SHOTS_NEEDED;
@@ -218,7 +278,7 @@ export function PhoneScreenshots() {
 
   return (
     <section className="ps">
-      <Top room={room} />
+      <Top />
       <h1 className="ps-title display">Show us your Explore page.</h1>
       <ol className="howto-shots">
         <li>Open Instagram and tap the search tab.</li>
@@ -228,7 +288,11 @@ export function PhoneScreenshots() {
       <div className="shots">
         {Array.from({ length: SHOTS_NEEDED }, (_, i) => (
           <div key={i} className={`shot-slot ${shots[i] ? 'is-filled' : ''} ${i === shots.length ? 'is-next' : ''}`}>
-            {shots[i] ? <img src={shots[i]} alt={`Screenshot ${i + 1}`} width={90} height={160} /> : <ImagePlus aria-hidden="true" />}
+            {shots[i] ? (
+              <img src={shots[i]} alt={`Screenshot ${i + 1}`} width={90} height={160} />
+            ) : (
+              <ImagePlus aria-hidden="true" />
+            )}
           </div>
         ))}
       </div>
@@ -247,6 +311,8 @@ export function PhoneScreenshots() {
               accept="image/*"
               multiple
               onChange={add}
+              tabIndex={-1}
+              aria-hidden="true"
             />
             <button className="btn btn-primary" onClick={() => input.current?.click()}>
               <ImagePlus aria-hidden="true" />
@@ -263,12 +329,22 @@ export function PhoneScreenshots() {
 const READ_MS = 5200;
 
 export function PhoneReading() {
-  const tags = useLoaderData() as string[];
-  const { shots } = usePhone();
+  const { me, shots } = usePhone();
+  const [tags, setTags] = useState<string[]>([]);
   const elapsed = useElapsed(150);
   const shown = tags.filter((_, i) => elapsed > 700 + i * 650);
-  useAutoAdvance('/phone/lobby', READ_MS);
-  const finished = shown.length === tags.length;
+  const finished = tags.length > 0 && shown.length === tags.length;
+
+  useEffect(() => {
+    let live = true;
+    act<{ tags: string[] }>('feed', { id: me }).then((r) => live && setTags(r.tags));
+    const t = setTimeout(() => act('seat', { id: me }), READ_MS); // the room takes it from here
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [me]);
+
   return (
     <section className="ps ps--center">
       <div className="reading-shots" aria-hidden="true">
@@ -300,11 +376,12 @@ const HOW_IT_WORKS = [
 ];
 
 export function PhoneLobby() {
-  const room = useLoaderData() as Room;
-  const crew = useCrew(room);
+  const { s } = useRoom();
+  const { me } = usePhone();
+  const crew = seatedOf(s);
   return (
     <section className="ps">
-      <Top room={room} />
+      <Top />
       <h1 className="ps-title display">You’re in.</h1>
       <p className="ps-sub">Sit back. The show starts from the big screen.</p>
       <ol className="howto">
@@ -330,7 +407,7 @@ export function PhoneLobby() {
                   </span>
                 )}
               </span>
-              {p.id === ME_ID ? 'You' : p.name}
+              {p.id === me ? 'You' : p.name}
             </span>
           );
         })}
@@ -343,24 +420,28 @@ export function PhoneLobby() {
 }
 
 export function PhoneReact() {
-  const { round } = useLoaderData() as RoundData;
-  const progress = Math.min(1, useElapsed() / TRAILER_MS);
+  const { s } = useRoom();
+  const { me } = usePhone();
+  const now = useServerNow();
+  const film = movie(s.movieId!);
+  const progress = Math.min(1, Math.max(0, (now - (s.trailerStartedAt ?? now)) / s.trailerMs));
   const [bursts, setBursts] = useState<{ id: number; idx: number; emoji: string }[]>([]);
   const nextId = useRef(0);
   const send = (idx: number) => {
     const id = nextId.current++;
     setBursts((b) => [...b.slice(-8), { id, idx, emoji: EMOTES[idx].emoji }]);
     navigator.vibrate?.(12);
+    act('react', { id: me, emoji: EMOTES[idx].emoji });
   };
   return (
     <section className="ps">
       <div className="now-playing">
-        <Poster movie={round.movie} />
+        <Poster movie={film} />
         <div className="np-text">
           <p className="np-live">
             <span className="live-dot" aria-hidden="true" /> On the big screen
           </p>
-          <p className="np-title">{round.movie.title}</p>
+          <p className="np-title">{film.title}</p>
           <div className="np-progress">
             <i style={{ width: `${progress * 100}%` }} />
           </div>
@@ -392,78 +473,84 @@ export function PhoneReact() {
 }
 
 export function PhoneVote() {
-  const { round } = useLoaderData() as RoundData;
-  const { movie } = round;
+  const { s } = useRoom();
+  const { me, setMyVote } = usePhone();
+  const [sent, setSent] = useState(false);
+  const film = movie(s.movieId!);
+  const vote = (v: 'yes' | 'no') => {
+    setSent(true);
+    setMyVote(s.round, v);
+    act('vote', { id: me, vote: v }).catch(() => setSent(false));
+  };
   return (
     <section className="ps">
       <div className="vote-head">
-        <Poster movie={movie} />
+        <Poster movie={film} />
         <div>
-          <p className="vote-title display">{movie.title}</p>
+          <p className="vote-title display">{film.title}</p>
           <p className="vote-meta">
-            {movie.year} · {movie.runtime}
+            {film.year} · {film.runtime}
           </p>
         </div>
       </div>
       <h1 className="ps-title display vote-q">Watch it tonight?</h1>
       <div className="vote-buttons">
-        <Link className="vote-btn vote-btn--yes" to={`/phone/voted/${round.n}?vote=yes`} replace>
+        <button className="vote-btn vote-btn--yes" onClick={() => vote('yes')} disabled={sent}>
           <Check aria-hidden="true" strokeWidth={3} />
           I’m in
-        </Link>
-        <Link className="vote-btn vote-btn--no" to={`/phone/voted/${round.n}?vote=no`} replace>
+        </button>
+        <button className="vote-btn vote-btn--no" onClick={() => vote('no')} disabled={sent}>
           <X aria-hidden="true" strokeWidth={3} />
           Pass
-        </Link>
+        </button>
       </div>
       <p className="fineprint">Your vote stays private. Everyone has to say yes for the golden buzzer.</p>
     </section>
   );
 }
 
-const LOCK_STAGGER_MS = 900;
-
 // Your own vote, and who has voted. Never what anyone else picked.
 export function PhoneVoted() {
-  const { room } = useLoaderData() as RoundData;
-  const [params] = useSearchParams();
-  const yes = params.get('vote') !== 'no';
-  const crew = useCrew(room);
-  const elapsed = useElapsed(150);
-  const others = crew.filter((p) => p.id !== ME_ID);
-  const lockedOthers = Math.min(others.length, Math.floor(elapsed / LOCK_STAGGER_MS));
-  const isLocked = (p: Person) => p.id === ME_ID || others.indexOf(p) < lockedOthers;
-  const left = others.length - lockedOthers;
+  const { s } = useRoom();
+  const { myVotes } = usePhone();
+  const mine = myVotes[s.round];
+  const crew = seatedOf(s);
+  const left = crew.filter((p) => !s.locked.includes(p.id)).length;
   return (
     <section className="ps ps--center">
-      <div className={`big-mark big-mark--${yes ? 'yes' : 'no'}`}>
-        {yes ? <Check aria-hidden="true" strokeWidth={3} /> : <X aria-hidden="true" strokeWidth={3} />}
+      <div className={`big-mark ${mine ? `big-mark--${mine}` : ''}`}>
+        {mine === 'no' ? <X aria-hidden="true" strokeWidth={3} /> : <Check aria-hidden="true" strokeWidth={3} />}
       </div>
-      <h1 className="ps-title display">{yes ? "You’re in." : 'You passed.'}</h1>
+      <h1 className="ps-title display">{mine === 'no' ? 'You passed.' : mine ? 'You’re in.' : 'Vote sent.'}</h1>
       <div className="lock-row">
-        {crew.map((p) => (
-          <span key={p.id} className={`slot ${isLocked(p) ? 'is-locked' : ''}`}>
-            <Avatar person={p} />
-            {isLocked(p) && <Lock aria-label={`${p.name} voted`} strokeWidth={2.8} />}
-          </span>
-        ))}
+        {crew.map((p) => {
+          const locked = s.locked.includes(p.id);
+          return (
+            <span key={p.id} className={`slot ${locked ? 'is-locked' : ''}`}>
+              <Avatar person={p} />
+              {locked && <Lock aria-label={`${p.name} voted`} strokeWidth={2.8} />}
+            </span>
+          );
+        })}
       </div>
       <div className="ps-foot">
-        <WaitingNote>{left ? `Waiting on ${left} more` : 'The verdict is on the big screen'}</WaitingNote>
+        <WaitingNote>{s.phase === 'vote' && left ? `Waiting on ${left} more` : 'The verdict is on the big screen'}</WaitingNote>
       </div>
     </section>
   );
 }
 
 export function PhoneMiss() {
-  const { round } = useLoaderData() as RoundData;
+  const { s } = useRoom();
   return (
     <section className="ps ps--center">
       <div className="big-mark">
         <Film aria-hidden="true" />
       </div>
       <h1 className="ps-title display">Not this one.</h1>
-      <p className="ps-sub">Not everyone was in on {round.movie.title}, so no golden buzzer. Tandem is tuning the next pick.</p>
+      <p className="ps-sub">
+        Not everyone was in on {movie(s.movieId!).title}, so no golden buzzer. Tandem is tuning the next pick.
+      </p>
       <div className="ps-foot">
         <WaitingNote>Next trailer coming up</WaitingNote>
       </div>
@@ -472,14 +559,14 @@ export function PhoneMiss() {
 }
 
 export function PhoneCheckpoint() {
-  const { round } = useLoaderData() as RoundData;
+  const { s } = useRoom();
   return (
     <section className="ps ps--center">
       <div className="big-mark">
         <Hourglass aria-hidden="true" />
       </div>
       <h1 className="ps-title display">Picks, or more trailers?</h1>
-      <p className="ps-sub">{round.n} trailers in and no golden buzzer yet. Look up: the big screen decides what’s next.</p>
+      <p className="ps-sub">{s.round} trailers in and no golden buzzer yet. Look up: the big screen decides what’s next.</p>
       <div className="ps-foot">
         <WaitingNote>Waiting for the big screen</WaitingNote>
       </div>
@@ -488,7 +575,7 @@ export function PhoneCheckpoint() {
 }
 
 export function PhoneBuzzer() {
-  const { round } = useLoaderData() as RoundData;
+  const { s } = useRoom();
   const scope = useRef<HTMLElement>(null);
   useMotion(() => {
     gsap
@@ -503,10 +590,10 @@ export function PhoneBuzzer() {
       </div>
       <h1 className="buzzer-title display">Golden Buzzer</h1>
       <p className="buzzer-note">
-        Everyone said yes to <b>{round.movie.title}</b>.
+        Everyone said yes to <b>{movie(s.movieId!).title}</b>.
       </p>
       <div className="ps-foot">
-        <p className="fineprint">Look up: tonight’s picks are coming to the big screen.</p>
+        <p className="fineprint">Look up: the big screen decides what’s next.</p>
       </div>
       <Confetti count={40} />
     </section>
@@ -514,31 +601,43 @@ export function PhoneBuzzer() {
 }
 
 export function PhonePicks() {
-  const { picks } = useLoaderData() as { picks: Picks };
+  const { s } = useRoom();
+  const top = s.picks?.top ?? [];
+  const more = s.picks?.more ?? [];
   return (
     <section className="ps">
       <h1 className="ps-title display">Your group’s top 3</h1>
       <ol className="mini-picks">
-        {picks.top.map((p, i) => (
-          <li key={p.movie.id}>
-            <span className="mini-rank">{i + 1}</span>
-            <Poster movie={p.movie} />
-            <span className="mini-text">
-              <b>{p.movie.title}</b>
-              <PickSource source={p.source} />
-            </span>
-          </li>
-        ))}
+        {top.map((p, i) => {
+          const film = movie(p.id);
+          return (
+            <li key={p.id}>
+              <span className="mini-rank">{i + 1}</span>
+              <Poster movie={film} />
+              <span className="mini-text">
+                <b>{film.title}</b>
+                <PickSource source={p.source} />
+              </span>
+            </li>
+          );
+        })}
       </ol>
-      <h2 className="label">5 more for your group</h2>
-      <ol className="mini-recs">
-        {picks.more.map((m) => (
-          <li key={m.id}>
-            <span>{m.title}</span>
-            {m.wildcard ? <Wildcard /> : <b>{m.match}%</b>}
-          </li>
-        ))}
-      </ol>
+      {more.length > 0 && (
+        <>
+          <h2 className="label">{more.length} more for your group</h2>
+          <ol className="mini-recs">
+            {more.map((id) => {
+              const film = movie(id);
+              return (
+                <li key={id}>
+                  <span>{film.title}</span>
+                  {film.wildcard ? <Wildcard /> : <b>{film.match}%</b>}
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      )}
       <div className="ps-foot">
         <WaitingNote>The big screen starts the movie</WaitingNote>
       </div>
@@ -547,7 +646,8 @@ export function PhonePicks() {
 }
 
 export function PhoneShowing() {
-  const { title } = useLoaderData() as { title: string };
+  const { s } = useRoom();
+  const title = s.showingId ? movie(s.showingId).title : 'the movie';
   return (
     <section className="ps ps--center ps--showing on-film">
       <div className="big-mark">

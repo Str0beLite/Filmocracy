@@ -2,7 +2,7 @@
 
 The Tandem app: the big screen (TV, laptop, projector) and the phone, in the Velvet look. Vite + React + TypeScript.
 
-**This pass is frontend only.** Every screen is real, but buttons only move to the next page and the data is mock. Nothing talks to the backend yet.
+**It runs on a fake backend for now.** A small in-memory room server (`mock-backend/`) runs inside the Vite dev server, so a real night works across the TV and everyone's phones: people join, pick feelings, react and vote, and the server counts votes, runs the timers and moves every screen together. Recommendations are a fixed list of 14 real catalog films, re-ranked by tonight's feelings and votes. The Python backend isn't involved yet.
 
 ## Run it
 
@@ -13,47 +13,52 @@ npm --prefix frontend install
 npm --prefix frontend run dev
 ```
 
-Open http://localhost:5173. In dev, that page lists every screen.
+1. On the laptop, open http://localhost:5173/tv and fullscreen it (F11). Put it on the TV or projector.
+2. Everyone scans the QR code with a phone on the **same Wi-Fi**. The QR points at the laptop's Wi-Fi address even when the TV page is on localhost.
+3. Each phone signs in (for now, "Sign in with Google" just asks for a first name), picks a feeling, adds 3 Explore screenshots, and takes a seat.
+4. Start the show from the big screen.
 
-- **Big screen:** open http://localhost:5173/tv/lobby on the laptop or TV, fullscreen it (F11).
-- **Phones:** must be on the same Wi-Fi as the laptop. Scan the QR code in the lobby, or the one on the index page. The dev server listens on the network and the QR code points at the laptop's Wi-Fi address, even when the TV page is open on localhost.
-- **Stepping through:** the arrows on the right edge of every screen (dev only) go to the next or previous screen, including the phone screens that would normally wait on the big screen.
+http://localhost:5173 (dev only) shows the room, a phone QR code, and buttons to jump the room to any screen for review (empty seats get test friends Maya, Jordan and Sam), fill seats, start a new night or reset the room.
 
-Other commands: `npm run build` (type-check + production build), `npm run lint`, `npm run preview`.
+Dev-only controls on the right edge: the TV's fast-forward skips to the next step (missing votes count as yes); the phone's leave button forgets this phone's seat. Each browser tab is its own person, so you can test with a few tabs on one laptop.
+
+**Real trailers:** put a TMDB API Read Access Token in `frontend/.env.local` as `VITE_TMDB_TOKEN` (see `.env.example`) and restart the dev server. The TV then plays each film's YouTube trailer to the end, looked up from TMDB by `tmdb_id` (`src/api/tmdb.ts`), and voting opens when it finishes. Without a token it shows placeholder art.
+
+Other commands: `npm run build` (type-check + production build), `npm run lint`, `npm run preview` (no fake backend in preview).
 
 ## How a night flows
 
 | Big screen | Phone |
 |---|---|
-| `/tv/lobby`: QR code, seats, Start the show | `/phone/join` → `sign-in` → `feeling` → `screenshots` (3 Explore screenshots) → `reading` → `lobby` (waits) |
-| `/tv/trailer/:n` (auto-advances when it ends, or Skip to vote) | `/phone/react/:n`: emotes |
+| `/tv/lobby`: QR code, seats fill as phones join, Start the show | `/phone/join` → `sign-in` → `name` → `feeling` → `screenshots` → `reading` → `lobby` (waits) |
+| `/tv/trailer/:n`: the whole trailer (12 s of placeholder art without one), or Skip to vote | `/phone/react/:n`: reactions float up from your seat on the TV |
 | `/tv/vote/:n` → `/tv/reveal/:n` | `/phone/vote/:n` → `/phone/voted/:n` |
-| `/tv/buzzer/:n`: everyone said yes (picks or keep browsing) | `/phone/buzzer/:n` |
-| `/tv/miss/:n`, then the next trailer | `/phone/miss/:n` |
-| `/tv/checkpoint/:n`: every 5 trailers without a buzzer, picks or keep watching | `/phone/checkpoint/:n` |
+| `/tv/buzzer/:n`: everyone said yes; picks or keep browsing | `/phone/buzzer/:n` |
+| `/tv/miss/:n`, then the next trailer on its own | `/phone/miss/:n` |
+| `/tv/checkpoint/:n`: every 5 trailers without a buzzer; picks or keep watching | `/phone/checkpoint/:n` |
 | `/tv/picks`: top 3 + 5 more, Start #1 | `/phone/picks` |
-| `/tv/showing/:id` | `/phone/showing/:id` |
+| `/tv/showing/:id`, then New night, same crew | `/phone/showing/:id` |
 
-Votes stay private: screens show who has voted, never how.
-
-The mock night is scripted in `src/api/mock.ts`: trailer 2 is a golden buzzer, and trailers 1 and 3–5 miss, so trailer 5 reaches the checkpoint.
+Votes stay private: the server never sends how anyone voted, only who has voted and whether it was unanimous. Each phone remembers its own vote. Voting closes by itself after 60 s, so a phone that fell asleep can't stall the night.
 
 ## Where things live
 
 | Path | What |
 |---|---|
-| `src/api/index.ts` | **The only place screens get data from.** Reads `mock.ts` today; wiring the backend means swapping these function bodies for fetches. |
-| `src/api/types.ts` | `Rec` matches the backend's rec shape; the rest is what screens need. |
-| `src/api/mock.ts` | Mock room, people, feelings (with the catalog tags each one boosts), trailers and picks. Films and ids are real rows from `backend/catalog/movies.json`. |
-| `src/router.tsx` | One URL per screen; loaders call `src/api`. |
+| `mock-backend/index.ts` | The fake backend: one room, its timers, vote counting, the fake re-ranking and pick ranking. Clients POST actions to `/mock-api/<action>` and listen on `/mock-api/events` (Server-Sent Events). |
+| `src/api/index.ts` | **The only place screens talk to the backend**: `connect()` for live snapshots, `act()` for actions, `movie()` for film details. The real session service should speak the same protocol. |
+| `src/api/types.ts` | `Snapshot` is what every screen sees; `Rec` matches the Python backend's rec shape. |
+| `src/api/mock.ts` | Films (real `movies.json` rows), placeholder details and art, feelings and the catalog tags each one boosts, fake feed tags. |
+| `src/api/tmdb.ts` | Trailer lookup: TMDB's videos for a `tmdb_id`, official YouTube trailer first. |
+| `src/room/` | `RoomProvider` keeps the live snapshot; `useRoom()` reads it. |
+| `src/lib/flow.ts` | Which screen each device should be on for the room's state. |
 | `src/tv/`, `src/phone/` | Big-screen and phone screens. |
-| `src/components/ui.tsx` | Seats, posters, QR, completion bar, confetti. |
-| `src/lib/` | Night rules (checkpoint, completion bar), next-screen flow, GSAP helpers. |
+| `src/components/ui.tsx` | Seats, posters, QR, completion bar, confetti, action buttons. |
 | `src/styles/` | `base.css` holds the Velvet tokens; `tv.css` and `phone.css` the screens. |
 | `demo/` | The original clickable demo (all three looks), kept as a reference. `python -m http.server 5174 --directory frontend/demo` |
 
 ## Not wired yet
 
-These come with the backend (see `docs/decisions.md`): a sessions module that runs the night over WebSockets, Google sign-in (dev login locally), uploading screenshots to `POST /feeds`, re-ranking group recs after every vote, sending tonight's feelings as tag boosts, and TMDB posters and trailers by `tmdb_id`. Posters and trailers are generated placeholder art until then.
+These come with the real backend (see `docs/decisions.md`): the session service (replacing `mock-backend/`), Google sign-in, uploading screenshots to `POST /feeds` (the phone keeps them locally for now), real group recs from `POST /groups/{id}/recs` with feelings as tag boosts, sending votes to `POST /feedback`, and TMDB posters by `tmdb_id`. Posters are generated placeholder art until then.
 
 `.env.example` lists the env vars the wired-up app will need.

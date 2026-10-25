@@ -6,7 +6,7 @@
   display: grid;
   place-items: center;
   height: 100dvh;
-  overflow: hidden;
+  overflow: clip;
   background: #000;
 }
 
@@ -14,7 +14,7 @@
   position: relative;
   width: min(100vw, 100dvh * 16 / 9);
   aspect-ratio: 16 / 9;
-  overflow: hidden;
+  overflow: clip;
   background: var(--bg);
   container-type: inline-size;
   isolation: isolate;
@@ -279,6 +279,23 @@
   gap: 2cqw;
 }
 
+.lobby-go {
+  display: flex;
+  align-items: center;
+  gap: 1.4cqw;
+}
+
+.lobby-note,
+.lobby-empty {
+  font-size: 1.15cqw;
+  color: var(--muted);
+}
+
+.lobby-empty {
+  align-self: center;
+  padding-bottom: 2cqw;
+}
+
 .seat-row {
   display: flex;
   align-items: flex-end;
@@ -286,7 +303,7 @@
   font-size: 1cqw;
 }
 
-/* ---- Trailer (placeholder film until real trailers are wired) ---- */
+/* ---- Trailer: the TMDB/YouTube trailer, or placeholder film without one ---- */
 
 .trailer {
   background: #000;
@@ -311,6 +328,15 @@
   transition:
     filter 0.8s,
     transform 0.8s;
+}
+
+.scene-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  pointer-events: none;
 }
 
 .scene.is-paused {
@@ -983,6 +1009,10 @@
 .showing-sub {
   font-size: 1.3cqw;
   color: var(--muted);
+}
+
+.showing-again {
+  margin-top: 3cqw;
 }
 
 @keyframes kenburns {

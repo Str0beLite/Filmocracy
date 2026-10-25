@@ -1,48 +1,39 @@
-﻿// Dev-only index of every screen, so anyone can jump straight to one.
+﻿// Dev-only home: open the big screen, get phones in, and jump the room
+// straight to any screen for review.
 
-import { Link } from 'react-router';
-import { Smartphone, Tv } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import { Smartphone, Tv, Users } from 'lucide-react';
+import { act } from '../api';
 import { QR, Wordmark } from '../components/ui';
+import { useRoom } from '../room/useRoom';
 
-const TV_SCREENS = [
-  ['/tv/lobby', 'Lobby with QR code'],
-  ['/tv/trailer/1', 'Trailer'],
-  ['/tv/vote/1', 'Vote on your phone'],
-  ['/tv/reveal/1', 'The verdict'],
-  ['/tv/miss/1', 'Not this one'],
-  ['/tv/buzzer/2', 'Golden buzzer'],
-  ['/tv/checkpoint/5', 'Checkpoint after 5 trailers'],
-  ['/tv/picks', 'Top 3 + 5 more'],
-  ['/tv/showing/195159', 'Now showing'],
-];
-
-const PHONE_SCREENS = [
-  ['/phone/join?room=K7Q2', 'Join (scanned QR)'],
-  ['/phone/join', 'Join (type a code)'],
-  ['/phone/sign-in', 'Sign in with Google'],
-  ['/phone/feeling', "Tonight’s feeling"],
-  ['/phone/screenshots', 'Explore screenshots'],
-  ['/phone/reading', 'Reading your feed'],
-  ['/phone/lobby', 'Waiting room'],
-  ['/phone/react/1', 'React during a trailer'],
-  ['/phone/vote/1', 'Vote'],
-  ['/phone/voted/1?vote=yes', 'Voted, waiting'],
-  ['/phone/miss/1', 'Not this one'],
-  ['/phone/buzzer/2', 'Golden buzzer'],
-  ['/phone/checkpoint/5', 'Checkpoint'],
-  ['/phone/picks', 'Top 3 + 5 more'],
-  ['/phone/showing/195159', 'Now showing'],
+const JUMPS = [
+  ['lobby', 'Lobby with QR code'],
+  ['trailer', 'Trailer'],
+  ['vote', 'Vote on your phone'],
+  ['reveal', 'The verdict'],
+  ['miss', 'Not this one'],
+  ['buzzer', 'Golden buzzer'],
+  ['checkpoint', 'Checkpoint after 5 trailers'],
+  ['picks', 'Top 3 + 5 more'],
+  ['showing', 'Now showing'],
 ];
 
 export function DevIndex() {
-  const phoneUrl = `${__LAN_ORIGIN__ || location.origin}/phone/join?room=K7Q2`;
+  const { s } = useRoom();
+  const navigate = useNavigate();
+  const phoneUrl = `${__LAN_ORIGIN__ || location.origin}/phone/join?room=${s.code}`;
+  const jump = async (screen: string) => {
+    await act('devGoto', { screen });
+    navigate('/tv');
+  };
   return (
     <main className="dev-index">
       <header>
         <Wordmark className="dev-wordmark" />
         <p>
-          Every screen, with mock data. Arrows on the right edge of any screen step through the night. Nothing talks to the
-          backend yet.
+          A fake backend runs inside this dev server, so the big screen and every phone share one live room. Open the big
+          screen on the laptop, then have everyone scan the QR code.
         </p>
       </header>
       <div className="dev-cols">
@@ -50,31 +41,52 @@ export function DevIndex() {
           <h2>
             <Tv aria-hidden="true" /> Big screen
           </h2>
+          <p className="dev-note">
+            <a href="/tv">Open the big screen</a>. Or jump the room to a screen (empty seats get test friends):
+          </p>
           <ul>
-            {TV_SCREENS.map(([to, label]) => (
-              <li key={to}>
-                <Link to={to}>{label}</Link>
-                <code>{to}</code>
+            {JUMPS.map(([screen, label]) => (
+              <li key={screen}>
+                <button className="dev-link" onClick={() => jump(screen)}>
+                  {label}
+                </button>
               </li>
             ))}
           </ul>
         </section>
         <section>
           <h2>
+            <Users aria-hidden="true" /> Room {s.code}
+          </h2>
+          <p className="dev-note">
+            {s.people.length
+              ? `${s.people.length} in the room: ${s.people.map((p) => p.name + (p.seated ? '' : ' (joining)')).join(', ')}.`
+              : 'Nobody here yet.'}{' '}
+            Now: {s.phase}
+            {s.round ? `, trailer ${s.round}` : ''}.
+          </p>
+          <div className="dev-actions">
+            <button className="dev-link" onClick={() => act('devFill')}>
+              Fill seats with test friends
+            </button>
+            <button className="dev-link" onClick={() => act('newNight')}>
+              New night, same people
+            </button>
+            <button className="dev-link" onClick={() => act('reset')}>
+              Reset the room
+            </button>
+          </div>
+          <h2 className="dev-h2-gap">
             <Smartphone aria-hidden="true" /> Phone
           </h2>
-          <ul>
-            {PHONE_SCREENS.map(([to, label]) => (
-              <li key={to}>
-                <Link to={to}>{label}</Link>
-                <code>{to}</code>
-              </li>
-            ))}
-          </ul>
+          <p className="dev-note">
+            <a href="/phone/join?room=K7Q2">Open the phone flow here</a>. Each browser tab is its own person, so you can
+            test with a few tabs.
+          </p>
         </section>
         <aside className="dev-qr">
           <QR text={phoneUrl} />
-          <p>Scan with a phone on the same Wi-Fi to open the phone flow.</p>
+          <p>Scan with a phone on the same Wi-Fi to join.</p>
           <code>{phoneUrl}</code>
         </aside>
       </div>

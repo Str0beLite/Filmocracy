@@ -1010,3 +1010,18 @@
     background: #f1f1f1;
   }
 }
+
+/* The name field reads as a name, not a code. */
+.field input.field-text {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.field-error {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--no);
+}

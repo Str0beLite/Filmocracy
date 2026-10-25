@@ -1,24 +1,15 @@
-// Rules of the night that both screens share.
+// Display helpers both screens share.
 
-import type { Outcome } from '../api';
-
-export const CHECKPOINT_EVERY = 5;
-export const TRAILER_MS = 12000;
-
-export const isCheckpoint = (n: number) => n % CHECKPOINT_EVERY === 0;
-
-// Where the big screen goes after a trailer's result.
-export function afterResult(n: number, outcome: Outcome) {
-  if (outcome === 'buzzer') return `/tv/buzzer/${n}`;
-  return isCheckpoint(n) ? `/tv/checkpoint/${n}` : `/tv/miss/${n}`;
-}
+import type { Snapshot } from '../api';
 
 // Completion status is a loading bar, not a model score: seating everyone
 // fills 30%, each trailer closes part of the remaining gap, picks hit 100%.
-export function completion(round: number, seated = 1) {
-  const setup = 30 * seated;
-  if (round <= 0) return Math.round(setup);
-  return Math.round(setup + (100 - setup) * (1 - Math.pow(0.6, round)) * 0.92);
+export function completion(s: Snapshot) {
+  if (s.phase === 'picks' || s.phase === 'showing' || s.outcome === 'buzzer') return 100;
+  const seated = s.people.filter((p) => p.seated).length;
+  const setup = 30 * (s.people.length ? seated / s.people.length : 0);
+  const rounds = s.phase === 'result' ? s.round : Math.max(0, s.round - 1);
+  return Math.round(setup + (100 - setup) * (1 - Math.pow(0.6, rounds)) * 0.92);
 }
 
 export function listNames(names: string[]) {
@@ -26,7 +17,7 @@ export function listNames(names: string[]) {
 }
 
 export function fmtTime(ms: number) {
-  const sec = Math.round(ms / 1000);
+  const sec = Math.max(0, Math.round(ms / 1000));
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 }
 

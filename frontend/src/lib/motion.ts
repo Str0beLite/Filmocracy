@@ -2,7 +2,6 @@
 // run `from` a hidden state and are skipped entirely for reduced motion.
 
 import { useEffect, useState, type RefObject } from 'react';
-import { useNavigate } from 'react-router';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 
@@ -30,14 +29,4 @@ export function useElapsed(every = 200) {
     return () => clearInterval(t);
   }, [every]);
   return now - start;
-}
-
-// Moves on to `to` after `ms`, the way the real night advances on its own.
-export function useAutoAdvance(to: string | null, ms: number) {
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (!to) return;
-    const t = setTimeout(() => navigate(to), ms);
-    return () => clearTimeout(t);
-  }, [to, ms, navigate]);
 }

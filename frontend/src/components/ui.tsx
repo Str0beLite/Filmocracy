@@ -1,11 +1,48 @@
 ﻿// Pieces both screens use: wordmark, avatars, seats, posters, QR, confetti,
 // the completion bar and pick labels.
 
-import { useMemo, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import qrcode from 'qrcode-generator';
 import { Lock, Shuffle, Star } from 'lucide-react';
-import type { Movie, Person, Pick } from '../api';
+import { act, type Movie, type Person, type Pick } from '../api';
 import { FEELING_ICONS, feelingOf } from '../lib/feelings';
+
+// A button that sends one room action and stays disabled while it's in flight.
+export function ActionButton({
+  action,
+  body,
+  className,
+  disabled,
+  onDone,
+  children,
+}: {
+  action: string;
+  body?: Record<string, unknown>;
+  className: string;
+  disabled?: boolean;
+  onDone?: () => void;
+  children: ReactNode;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      className={className}
+      disabled={disabled || busy}
+      aria-busy={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await act(action, body);
+          onDone?.();
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function Wordmark({ className = '' }: { className?: string }) {
   return (
@@ -33,7 +70,7 @@ export function LivePill({ children }: { children: ReactNode }) {
   );
 }
 
-type SeatState = 'seated' | 'away' | 'locked' | 'thinking';
+type SeatState = 'seated' | 'joining' | 'locked' | 'thinking';
 
 // A theater seat with someone (or nobody yet) in it. Seats show who is here
 // and who has voted, never how anyone voted. `children` float above it.
@@ -76,16 +113,14 @@ export function Seat({
       <div className="seat-name">{person.name}</div>
       {showFeeling && (
         <div className="seat-feeling">
-          {state === 'away' ? (
-            'Not here yet'
+          {state === 'joining' ? (
+            'Joining…'
           ) : FeelingIcon && feeling ? (
             <>
               <FeelingIcon aria-hidden="true" />
               {feeling.short}
             </>
-          ) : (
-            'Joining…'
-          )}
+          ) : null}
         </div>
       )}
     </div>
