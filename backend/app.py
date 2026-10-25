@@ -6,7 +6,7 @@ from typing import Literal, Optional
 from uuid import UUID
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
@@ -120,11 +120,15 @@ app.add_middleware(
 )
 
 
-async def user_token(credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer)):
+async def user_token(
+    request: Request, credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer)
+):
     if credentials is None:
         raise HTTPException(401, "Bearer token required", headers={"WWW-Authenticate": "Bearer"})
     # Auth server verifies the token; never trust a decoded JWT or a body user_id.
-    await app.state.db.request("GET", "/auth/v1/user", token=credentials.credentials)
+    request.state.user = await request.app.state.db.request(
+        "GET", "/auth/v1/user", token=credentials.credentials
+    )
     return credentials.credentials
 
 
@@ -152,28 +156,32 @@ async def health():
 
 
 @app.post("/sessions", response_model=SessionCreated)
-async def create_session(body: CreateSession, token=Depends(user_token)):
-    return await app.state.db.rpc("create_session", {"p_name": body.display_name}, token=token)
+async def create_session(body: CreateSession, request: Request, token=Depends(user_token)):
+    return await request.app.state.db.rpc(
+        "create_session", {"p_name": body.display_name}, token=token
+    )
 
 
 @app.post("/sessions/join", response_model=SessionJoined)
-async def join_session(body: JoinSession, token=Depends(user_token)):
-    session_id = await app.state.db.rpc(
+async def join_session(body: JoinSession, request: Request, token=Depends(user_token)):
+    session_id = await request.app.state.db.rpc(
         "join_session", {"p_token": body.invite_token, "p_name": body.display_name}, token=token
     )
     return {"session_id": session_id}
 
 
 @app.post("/sessions/{session_id}/invitation", response_model=InvitationResponse)
-async def invitation(session_id: UUID, token=Depends(user_token)):
-    value = await app.state.db.rpc("rotate_invite", {"p_session": str(session_id)}, token=token)
+async def invitation(session_id: UUID, request: Request, token=Depends(user_token)):
+    value = await request.app.state.db.rpc(
+        "rotate_invite", {"p_session": str(session_id)}, token=token
+    )
     return {"invite_token": value}
 
 
 @app.get("/sessions/{session_id}", response_model=SessionState)
-async def session_state(session_id: UUID, token=Depends(user_token)):
+async def session_state(session_id: UUID, request: Request, token=Depends(user_token)):
     params = {"session_id": f"eq.{session_id}", "select": "*"}
-    sessions = await app.state.db.request(
+    sessions = await request.app.state.db.request(
         "GET",
         "/rest/v1/group_sessions",
         token=token,
@@ -184,7 +192,7 @@ async def session_state(session_id: UUID, token=Depends(user_token)):
     tables = ("session_members", "session_movies", "voting_rounds", "round_participants", "votes")
     rows = await asyncio.gather(
         *(
-            app.state.db.request("GET", f"/rest/v1/{table}", token=token, params=params)
+            request.app.state.db.request("GET", f"/rest/v1/{table}", token=token, params=params)
             for table in tables
         )
     )
@@ -192,27 +200,27 @@ async def session_state(session_id: UUID, token=Depends(user_token)):
 
 
 @app.post("/sessions/{session_id}/heartbeat", response_model=RoundResponse)
-async def heartbeat(session_id: UUID, token=Depends(user_token)):
+async def heartbeat(session_id: UUID, request: Request, token=Depends(user_token)):
     return {
-        "round_id": await app.state.db.rpc(
+        "round_id": await request.app.state.db.rpc(
             "heartbeat", {"p_session": str(session_id), "p_leave": False}, token=token
         )
     }
 
 
 @app.post("/sessions/{session_id}/leave", response_model=RoundResponse)
-async def leave(session_id: UUID, token=Depends(user_token)):
+async def leave(session_id: UUID, request: Request, token=Depends(user_token)):
     return {
-        "round_id": await app.state.db.rpc(
+        "round_id": await request.app.state.db.rpc(
             "heartbeat", {"p_session": str(session_id), "p_leave": True}, token=token
         )
     }
 
 
 @app.post("/sessions/{session_id}/votes", response_model=RoundResponse)
-async def vote(session_id: UUID, body: Vote, token=Depends(user_token)):
+async def vote(session_id: UUID, body: Vote, request: Request, token=Depends(user_token)):
     return {
-        "round_id": await app.state.db.rpc(
+        "round_id": await request.app.state.db.rpc(
             "cast_vote",
             {"p_session": str(session_id), "p_round": str(body.round_id), "p_value": body.value},
             token=token,
@@ -221,11 +229,11 @@ async def vote(session_id: UUID, body: Vote, token=Depends(user_token)):
 
 
 @app.post("/sessions/{session_id}/control", response_model=RoundResponse)
-async def control(session_id: UUID, body: Control, token=Depends(user_token)):
+async def control(session_id: UUID, body: Control, request: Request, token=Depends(user_token)):
     if body.action == "skip" and body.expected_round_id is None:
         raise HTTPException(422, "Skipping requires expected_round_id")
     return {
-        "round_id": await app.state.db.rpc(
+        "round_id": await request.app.state.db.rpc(
             "control_session",
             {
                 "p_session": str(session_id),
@@ -238,9 +246,11 @@ async def control(session_id: UUID, body: Control, token=Depends(user_token)):
 
 
 @app.post("/sessions/{session_id}/queue", response_model=QueueResponse)
-async def prepare_queue(session_id: UUID, token=Depends(user_token)):
+async def prepare_queue(session_id: UUID, request: Request, token=Depends(user_token)):
+    if hasattr(request.app.state, "integration"):
+        return await request.app.state.integration.queue(str(session_id), token)
     # Read as caller; installation RPC also enforces host authority under a lock.
-    sessions = await app.state.db.request(
+    sessions = await request.app.state.db.request(
         "GET",
         "/rest/v1/group_sessions",
         token=token,
@@ -248,10 +258,10 @@ async def prepare_queue(session_id: UUID, token=Depends(user_token)):
     )
     if not sessions:
         raise HTTPException(404, "Session not found")
-    catalog = await app.state.db.request(
+    catalog = await request.app.state.db.request(
         "GET", "/rest/v1/movies", token=token, params={"select": "id", "order": "id", "limit": 100}
     )
-    queued = await app.state.db.request(
+    queued = await request.app.state.db.request(
         "GET",
         "/rest/v1/session_movies",
         token=token,
@@ -261,7 +271,7 @@ async def prepare_queue(session_id: UUID, token=Depends(user_token)):
         str(session_id), [m["id"] for m in catalog], frozenset(m["movie_id"] for m in queued)
     )
     movie_ids = await provider.movie_ids(context, 100)
-    count = await app.state.db.rpc(
+    count = await request.app.state.db.rpc(
         "enqueue_movies", {"p_session": str(session_id), "p_movies": movie_ids}, token=token
     )
     return {"added": count}
