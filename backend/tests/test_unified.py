@@ -498,3 +498,58 @@ def test_migration_is_idempotent_and_preserves_existing_recommendation_data(tmp_
         assert json.loads(row["details"])["title"] == "Hand edited title"
     finally:
         restored.db.close()
+
+
+def test_websocket_votes_reconnection_and_access_control(setup, monkeypatch):
+    from starlette.websockets import WebSocketDisconnect
+
+    monkeypatch.setattr("sqlite_sessions.current_user", auth)
+    factory, _, _ = setup
+    with TestClient(factory()) as c:
+        monkeypatch.setattr(c.app.state.integration, "playable", playable)
+        sid = lobby(c)["session_id"]
+        path = f"/sessions/{sid}/ws"
+        for token, code in [("invalid", 4401), ("outsider", 4403)]:
+            with c.websocket_connect(path) as ws:
+                ws.send_json({"type": "auth", "token": token})
+                with pytest.raises(WebSocketDisconnect) as closed:
+                    ws.receive_json()
+                assert closed.value.code == code
+        with pytest.raises(WebSocketDisconnect):
+            with c.websocket_connect(path, headers={"origin": "https://evil.example"}):
+                pass
+        with c.websocket_connect(path) as ws:
+            ws.send_json([])
+            with pytest.raises(WebSocketDisconnect):
+                ws.receive_json()
+        post(c, f"/sessions/{sid}/queue")
+        rid = post(c, f"/sessions/{sid}/control", json={"action": "start"}).json()["round_id"]
+        with c.websocket_connect(path) as ws:
+            ws.send_json({"type": "auth", "token": "tv"})
+            first = ws.receive_json()
+            assert first["type"] == "state"
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                responses = list(pool.map(lambda user: post(
+                    c, f"/sessions/{sid}/votes", user, json={"round_id": rid, "value": 1}
+                ), ("a", "b", "c")))
+            assert all(r.status_code == 200 for r in responses)
+            while True:
+                changed = ws.receive_json()
+                if len(changed["state"]["votes"]) == 3:
+                    break
+            assert changed["revision"] > first["revision"]
+            assert len(changed["state"]["voting_rounds"]) == 2
+        with c.websocket_connect(path) as ws:
+            ws.send_json({"type": "auth", "token": "tv"})
+            assert ws.receive_json() == changed
+            ws.send_json({"type": "ping"})
+            assert ws.receive_json() == {"type": "pong"}
+        with c.websocket_connect(path) as ws:
+            ws.send_json({"type": "auth", "token": "a"})
+            ws.receive_json()
+            ws.send_json({"type": "heartbeat"})
+            assert ws.receive_json()["revision"] > changed["revision"]
+            post(c, f"/sessions/{sid}/leave", "a")
+            with pytest.raises(WebSocketDisconnect) as closed:
+                ws.receive_json()
+            assert closed.value.code == 4403
