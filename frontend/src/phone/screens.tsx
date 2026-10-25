@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react';
 import { EMOTES, act, movie, type Snapshot } from '../api';
-import { Avatar, Confetti, LivePill, PickSource, Poster, Wildcard, Wordmark } from '../components/ui';
+import { Avatar, Confetti, FilmMeta, LivePill, PickSource, Poster, Wildcard, Wordmark } from '../components/ui';
 import { FEELING_ICONS } from '../lib/feelings';
 import { trailerProgress } from '../lib/night';
 import { gsap, useMotion } from '../lib/motion';
@@ -385,7 +385,7 @@ export function PhoneVote() {
         <div>
           <p className="vote-title display">{film.title}</p>
           <p className="vote-meta">
-            {film.year} · {film.runtime}
+            <FilmMeta movie={film} genres={false} />
           </p>
         </div>
       </div>

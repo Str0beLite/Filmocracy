@@ -28,6 +28,20 @@ from tandem import config
 from tandem.encoder import embed, unit
 
 
+ARTICLES = r"The|A|An|Les|La|Le|L'|Il|El|Los|Las|Die|Der|Das|Den|Det|De|Het|Lo|Una|Un|Une|Gli|I"
+
+
+def clean_title(t):
+    """MovieLens style -> how people say it: "Illusionist, The (L'illusionniste)" -> "The Illusionist"."""
+    while (s := re.sub(r"\s+\([^()]*\)$", "", t)) != t and s:  # trailing alternate / original-language titles
+        t = s
+    if m := re.match(rf"^(.*), ({ARTICLES})$", t):
+        t = m.group(2) + ("" if m.group(2).endswith("'") else " ") + m.group(1)
+    if m := re.match(rf"^(.*), ({ARTICLES})(:| -) (.*)$", t):  # "Lord of the Rings, The: The Two Towers"
+        t = f"{m.group(2)} {m.group(1)}{m.group(3)} {m.group(4)}"
+    return t
+
+
 def load_genome(d, top, k):
     d = Path(d).expanduser()
     with open(d / "genome-tags.csv", newline="") as f:
@@ -42,7 +56,7 @@ def load_genome(d, top, k):
         for r in csv.DictReader(f):
             m = re.match(r"^(.*)\s+\((\d{4})\)\s*$", r["title"])
             title, year = (m.group(1), m.group(2)) if m else (r["title"], None)
-            meta[int(r["movieId"])] = {"id": int(r["movieId"]), "title": title, "year": year}
+            meta[int(r["movieId"])] = {"id": int(r["movieId"]), "title": clean_title(title), "year": year}
     if (d / "links.csv").exists():
         with open(d / "links.csv", newline="") as f:
             for r in csv.DictReader(f):
