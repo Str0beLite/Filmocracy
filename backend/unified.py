@@ -34,11 +34,7 @@ def create_app(catalog=None, store=None, metadata=None, clock=None):
                 except Exception:
                     log.warning("Session expiry sweep deferred; will retry")
             try:
-                version, _ = app.state.tandem["trainer"].current()
-                synced = await asyncio.to_thread(app.state.sessions.sync_feedback, version)
-                if training:
-                    for _ in range(synced):
-                        app.state.tandem["trainer"].notify_event()
+                await asyncio.to_thread(app.state.integration.sync_votes)
             except Exception:
                 log.warning("Vote feedback sync deferred; accepted votes remain saved")
             await asyncio.sleep(10)

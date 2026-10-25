@@ -48,6 +48,7 @@ HOLDOUT_NEWEST_FRAC = 0.10
 # Serving.
 N_RECS = 10
 N_EXPLORE = 2
+SESSION_BATCH = _env("TANDEM_SESSION_BATCH", 2, int)   # films queued per movie-night re-score; small, so votes steer the next ones
 EXPLORE_RANKS = (10, 50)   # exploration picks come from ranks 11–50
 
 POSITIVE_LABELS = {"love", "seen_loved", "favourite"}

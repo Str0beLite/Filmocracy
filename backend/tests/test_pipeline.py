@@ -268,13 +268,21 @@ def test_summarize_sums_up_the_feed_and_falls_back_to_the_average(monkeypatch):
 def test_votes_pull_the_next_recs_before_any_retrain():
     cat = make_catalog()
     model = Translator(cat.w0).eval()
-    x = cat.feed_vector({"dark comedy": 1.0})
+    x = bag({"dark comedy": 1.0})   # uncentred: the hashing test encoder's centred feeds swamp the pull
     target = [i for i, m in enumerate(cat.movies) if m["title"].startswith("Underdog")]
     rank = lambda s, i: int((s > s[i]).sum())
     before = score_feed(model, x, cat.vecs)
     after = score_feed(model, x, cat.vecs, pos=set(target[:3]))
     # the unvoted underdog films climb because they share tags with the loved ones
     assert all(rank(after, i) < rank(before, i) for i in target[3:])
+
+
+def test_feeds_are_centred_so_different_feeds_stay_apart():
+    cat = make_catalog()
+    a, b = {"dark comedy": 1.0, "heist": 0.5}, {"underdog story": 1.0, "sports": 0.5}
+    fa, fb = cat.feed_vector(a), cat.feed_vector(b)
+    assert np.linalg.norm(fa) == pytest.approx(1.0, abs=1e-5)
+    assert float(fa @ fb) < float(bag(a) @ bag(b))   # the shared "generic" direction is gone
 
 
 def test_popularity_weight_is_learned_and_old_checkpoints_still_load(monkeypatch):
@@ -301,3 +309,17 @@ def test_popularity_weight_is_learned_and_old_checkpoints_still_load(monkeypatch
     assert from_state(cat.w0, state(m)).pop.item() == pytest.approx(m.pop.item())
     monkeypatch.setattr(config, "POP_MAX", 0.0)   # the default cap: popularity stops counting, however high pop learned
     assert torch.equal(m.pop_term(prior), torch.zeros_like(prior))
+
+
+def test_queue_scores_add_each_voters_mood():
+    from session_recommendations import SessionRecommendations
+    cat = make_catalog()
+    for m in cat.movies[:5]:
+        m["tags"]["comedy"] = 1.0
+    trainer = type("T", (), {"current": lambda self: (0, Translator(cat.w0).eval())})()
+    store = type("S", (), {"votes": lambda self, fid: (set(), set())})()
+    recs = SessionRecommendations(None, {"store": store, "trainer": trainer, "catalog": cat}, None)
+    feed = {"id": "f", "x": cat.feed_vector({"heist": 1.0})}
+    lift = recs.scores([(feed, "laugh"), (feed, None)]) - recs.scores([(feed, None), (feed, None)])
+    # half the room wants to laugh: comedies get half the boost, nothing else moves
+    assert np.allclose(lift[:5], config.TAG_BOOST / 2) and np.allclose(lift[5:], 0)

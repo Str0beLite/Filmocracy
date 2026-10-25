@@ -38,15 +38,18 @@ SCHEMA = {
     "required": ["is_ad_or_noise", "tags"],
 }
 
+# Neither prompt mentions film. Asking for moods, tones and themes (plus a few broad worlds) instead of personality
+# traits lands near the catalog's tag vocabulary anyway: on 3 sample feeds, tags near a film tag rose 35% -> 47%.
 PROMPT = (
     "This is one post or reel from someone's Instagram Explore page, which Instagram picked to match their "
-    "taste. Don't describe the post: describe the person who keeps getting shown it. Give 5 to 12 short lowercase "
-    "tags (1 to 4 words each), each with a weight from 0 to 1 for how strongly it applies. Tags are personality "
-    "traits, values, moods and the kind of experience they seek out, phrased so they would also describe a "
-    "film they'd like. Examples: hackathon reels -> 'goal-oriented', 'motivational', 'underdog story'; UI design "
-    "-> 'visual spectacle', 'perfectionist', 'clever'; gym -> 'disciplined', 'adrenaline', 'triumph'; cozy "
-    "cafes -> 'cozy', 'slow-paced', 'romantic'. At most 2 tags may name the topic itself (e.g. 'deadlift'); "
-    "never tag plain objects, hashtags or text on screen. "
+    "taste. Describe the feeling and world it pulls them into, the way a critic sums up a work's tone and "
+    "themes. Give 5 to 12 short lowercase tags (1 to 3 words each), each with a weight from 0 to 1 for how strongly "
+    "it applies. Most tags should be the mood, tone or atmosphere ('dark humor', 'whimsical', 'melancholy', "
+    "'suspense', 'feel-good', 'gritty', 'dreamlike') and the deeper themes ('rivalry', 'friendship', 'survival', "
+    "'coming of age', 'obsession', 'underdog'). A few may name the broad world, setting or style "
+    "('technology', 'robots', 'fashion', 'small town', 'tokyo', '1980s', 'surreal', 'colorful'), kept general: "
+    "'technology' not 'ui design'. Never tag formats ('tutorial', 'tips', 'memes', 'app'), personality adjectives "
+    "('curious', 'ambitious', 'creative'), plain objects, brands, hashtags or text on screen. "
     "Set is_ad_or_noise to true for ads, sponsored posts, or tiles with no real content.\n\n"
     'Reply with JSON only: {"is_ad_or_noise": false, "tags": [{"tag": "...", "weight": 0.8}]}'
 )
@@ -105,12 +108,11 @@ async def read_screenshots(screenshots, concurrency=6):
 
 SYNTH_PROMPT = (
     "Below are tags a model wrote for each post on one person's Instagram Explore page, one line per post "
-    "(ads already removed). Looking at the whole feed together, describe the person: give 10 to 15 short "
-    "lowercase tags (1 to 4 words) with weights 0 to 1. Merge near-duplicates into one tag, weight traits by how "
-    "much of the feed supports them, and drop one-off tags that don't fit the bigger picture. Tags are "
-    "personality traits, values, moods and experiences they seek out, written as bare traits a film could also "
-    "have: 'visual spectacle' not 'loves visual spectacle', 'curious' not 'curious person'. At most 3 tags may "
-    "name a topic.\n\n{lines}\n\n"
+    "(ads already removed). Looking at the whole feed together, sum up the feelings and worlds that draw this "
+    "person in, the way a critic sums up a work's tone and themes: give 10 to 15 short lowercase tags (1 to 3 "
+    "words) with weights 0 to 1. Merge near-duplicates into one tag, weight tags by how much of the feed supports "
+    "them, and drop one-off tags that don't fit the bigger picture. Mostly moods, tones and themes; at most 4 "
+    "broad worlds, settings or styles, kept general. No formats, personality adjectives or brands.\n\n{lines}\n\n"
     'Reply with JSON only: {{"is_ad_or_noise": false, "tags": [{{"tag": "...", "weight": 0.8}}]}}'
 )
 

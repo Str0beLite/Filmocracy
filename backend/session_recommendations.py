@@ -9,9 +9,20 @@ from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 from fastapi import HTTPException
+from tandem import config
 from tandem.recommend import boost, pick, score_feed
 
 log = logging.getLogger(__name__)
+
+# Catalog tags each phone feeling boosts. Keep in step with FEELINGS in frontend/src/api/data.ts.
+FEELING_BOOST = {
+    "laugh": ["comedy", "funny", "hilarious"],
+    "edge": ["suspense", "tense", "thriller"],
+    "feels": ["emotional", "touching", "sad"],
+    "mindblown": ["mindfuck", "twist ending", "cerebral"],
+    "cozy": ["feel-good", "heartwarming"],
+    "hyped": ["action", "action packed", "intense"],
+}
 
 
 def mean_scores(scores):
@@ -131,21 +142,39 @@ class SessionRecommendations:
         self.trailers[key] = time.time(), ok
         return ok
 
+    def sync_votes(self):
+        """Copy new session votes into the feedback log (and wake the trainer for each)."""
+        version, _ = self.state["trainer"].current()
+        synced = self.sessions.sync_feedback(version)
+        for _ in range(synced):
+            self.state["trainer"].notify_event()
+        return synced
+
     def scores(self, feeds):
+        """feeds: [(feed, feeling)]. Each voter's taste is pulled toward their yes votes and away from their no
+        votes, then gets their own mood boost before averaging: a film that fits half the room's mood gets half."""
         _, model = self.state["trainer"].current()
+        cat = self.state["catalog"]
         return self.aggregate(
-            [score_feed(model, f["x"], self.state["catalog"].vecs) for f in feeds]
+            [
+                boost(
+                    score_feed(model, f["x"], cat.vecs, None, *self.store.votes(f["id"])),
+                    cat.movies,
+                    FEELING_BOOST.get(feeling, []),
+                )
+                for f, feeling in feeds
+            ]
         )
 
     async def queue(self, sid, user):
         async with self.lock:
             try:
-                feed_ids, queued = await asyncio.to_thread(self.sessions.context, sid, user)
-                feeds = [self.store.get_feed(fid) for fid in feed_ids]
-                feeds = [feed for feed in feeds if feed]
+                seated, shown = await asyncio.to_thread(self.sessions.context, sid, user)
+                feeds = [(self.store.get_feed(fid), feeling) for fid, feeling in seated]
+                feeds = [(feed, feeling) for feed, feeling in feeds if feed]
                 if not feeds:
                     raise HTTPException(409, "At least one connected voter needs a feed")
-                candidates = [row for row in self.sessions.metadata() if row["id"] not in queued]
+                candidates = [row for row in self.sessions.metadata() if row["id"] not in shown]
                 semaphore = asyncio.Semaphore(6)
 
                 async def check(row):
@@ -169,10 +198,11 @@ class SessionRecommendations:
                     raise HTTPException(
                         409, "No unshown, verified playable catalog matches available"
                     )
+                await asyncio.to_thread(self.sync_votes)  # this round's votes steer the next films
                 scores = await asyncio.to_thread(self.scores, feeds)
                 if not np.isfinite(scores).all():
                     raise ValueError("Non-finite recommendation scores")
-                items = pick(scores, exclude=set(range(len(scores))) - eligible.keys())
+                items = pick(scores, exclude=set(range(len(scores))) - eligible.keys())[: config.SESSION_BATCH]
                 predictions = {str(eligible[idx]): float(scores[idx]) for idx in eligible}
                 return await asyncio.to_thread(
                     self.sessions.enqueue,
