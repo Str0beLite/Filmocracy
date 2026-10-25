@@ -1,0 +1,387 @@
+{
+  "overlap": 63,
+  "provider_verified": 62,
+  "note": "Provider checks apply to TRAILER_REGION (default US); test actual TV playback separately.",
+  "results": [
+    {
+      "supabase_id": 76,
+      "youtube_id": "IoYahD_xNR0",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 91,
+      "youtube_id": "L2NAh3CIdig",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 98,
+      "youtube_id": "QwievZ1Tx-8",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 102,
+      "youtube_id": "LY19rHKAaAg",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 105,
+      "youtube_id": "T6iQnnHNF50",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 106,
+      "youtube_id": "Rvr68u6k5sI",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 115,
+      "youtube_id": "KEXdWfsKZ1k",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 122,
+      "youtube_id": "JE9z-gy4De4",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 124,
+      "youtube_id": "8nYuu5jpWVs",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 125,
+      "youtube_id": "_PZpmTj1Q8Q",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 126,
+      "youtube_id": "_nZdmwHrcnw",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 127,
+      "youtube_id": "Ew9ngL1GZvs",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 128,
+      "youtube_id": "PLl99DlL6b4",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 129,
+      "youtube_id": "hIR8Ar-Z4hw",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 130,
+      "youtube_id": "Q7kZy3T6vRM",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 134,
+      "youtube_id": "Y6Fv5StfAxA",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 136,
+      "youtube_id": "BgwJEpmPKk8",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 138,
+      "youtube_id": "l91Km49W9qI",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 144,
+      "youtube_id": "geFtxCSz8xI",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 148,
+      "youtube_id": "VQ-SCoyUwfg",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 150,
+      "youtube_id": "kwM3kN8PNOc",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 155,
+      "youtube_id": "zckJCxYxn1g",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 156,
+      "youtube_id": "DD-6bmOY__g",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 158,
+      "youtube_id": "GAp2_0JJskk",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 160,
+      "youtube_id": "kR2r-A9H3Kg",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 161,
+      "youtube_id": "t06RUxPbp_c",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 162,
+      "youtube_id": "uxjNDE2fMjI",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 169,
+      "youtube_id": "JAUoeqvedMo",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 171,
+      "youtube_id": "FVI84Dfx2-I",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 172,
+      "youtube_id": "nE11U5iBnH0",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 173,
+      "youtube_id": "ARCQf2CEr8k",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 175,
+      "youtube_id": "VwErvYgoH70",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 176,
+      "youtube_id": "gVC0bENF-Ec",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 177,
+      "youtube_id": "1HFv47QHWJU",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 180,
+      "youtube_id": "R0ShE0EbcCA",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 181,
+      "youtube_id": "dfeUzm6KF4g",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 182,
+      "youtube_id": "tGpTpVyI_OQ",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 185,
+      "youtube_id": "MonFNCgK4WE",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 193,
+      "youtube_id": "TvRCQM2HrXs",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 194,
+      "youtube_id": "v0RB-3sWbBA",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 195,
+      "youtube_id": "cPNiwc3ogIo",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 198,
+      "youtube_id": "Slj4-Sv-YNA",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 201,
+      "youtube_id": "47PHbQTmw5g",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 202,
+      "youtube_id": "EK3j98PHaGM",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 203,
+      "youtube_id": "vKgITiP1UMg",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 206,
+      "youtube_id": "ijXruSzfGEc",
+      "playback": "excluded_by_provider",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 208,
+      "youtube_id": "IXshQ5mv1K8",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 210,
+      "youtube_id": "nuTU5XcZTLA",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 215,
+      "youtube_id": "_iH0UBYDI4g",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 217,
+      "youtube_id": "wO44qBPBG4c",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 218,
+      "youtube_id": "4xkFJgcCQRE",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 220,
+      "youtube_id": "GtzwDv0lrBg",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 226,
+      "youtube_id": "qoEyZoOTtss",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 227,
+      "youtube_id": "8ugaeA-nMTc",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 228,
+      "youtube_id": "OtgnqWLYqHo",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 230,
+      "youtube_id": "KPOuJGkpblk",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 231,
+      "youtube_id": "P5ieIbInFpg",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 232,
+      "youtube_id": "zzCZ1W_CUoI",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 239,
+      "youtube_id": "jm2sNLIPPvA",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 240,
+      "youtube_id": "09w9MTtZDEM",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 242,
+      "youtube_id": "k10ETZ41q5o",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 247,
+      "youtube_id": "Mj9IA9tTfio",
+      "playback": "provider_verified",
+      "metadata": "available"
+    },
+    {
+      "supabase_id": 251,
+      "youtube_id": "CxwTLktovTU",
+      "playback": "provider_verified",
+      "metadata": "available"
+    }
+  ],
+  "audit_date": "2026-10-24",
+  "region": "US"
+}

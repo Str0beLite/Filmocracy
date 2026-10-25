@@ -4,6 +4,9 @@ FastAPI + Supabase Postgres/Auth/Realtime. Schema and relationships are document
 in [the backend plan](../docs/backend-plan.md); versioned SQL is in
 [`supabase/migrations`](../supabase/migrations). Embeddings are deferred.
 
+See [the unified backend guide](../docs/unified-backend.md) for feed attachment,
+ID mapping, final rankings, recovery and persistent Railway storage.
+
 ## Setup and run
 
 Python 3.9+; from the repository root:
@@ -11,6 +14,7 @@ Python 3.9+; from the repository root:
 ```bash
 python3 -m venv backend/.venv
 backend/.venv/bin/python -m pip install pip==25.3
+backend/.venv/bin/python -m pip install torch -r backend/requirements.txt
 backend/.venv/bin/python -m pip install -r backend/requirements.lock
 backend/.venv/bin/python -m pip install --no-deps -e backend
 ```
@@ -21,7 +25,7 @@ FRONTEND_ORIGINS to the frontend origins, comma-separated. With those variables
 exported into the shell, one command runs the service and disconnect sweeper:
 
 ```bash
-backend/.venv/bin/uvicorn app:app --app-dir backend --host 0.0.0.0 --port 8000
+backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 8000
 ```
 
 The server does not load .env automatically: use your environment manager or
@@ -44,7 +48,7 @@ and auth.uid() remain effective. Direct browser RPC calls enforce the same rules
 | POST /sessions/join | `{ "display_name": "Alice", "invite_token": "…" }` |
 | GET /sessions/{id} | Member-only session state, rounds, electorate, votes, queue |
 | POST /sessions/{id}/invitation | Host rotates invitation and receives new token |
-| POST /sessions/{id}/queue | Host appends mock provider's catalog IDs, idempotently |
+| POST /sessions/{id}/queue | Host appends mapped, trailer-eligible recommendations |
 | POST /sessions/{id}/control | `{ "action": "start" }`, `skip` with expected_round_id, or `end` |
 | POST /sessions/{id}/votes | `{ "round_id": "UUID", "value": 1 }`; -1 for dislike |
 | POST /sessions/{id}/heartbeat | Phone renews lease every 10 seconds |

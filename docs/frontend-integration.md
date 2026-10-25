@@ -1,3 +1,5 @@
+> Unified backend update: see [unified-backend.md](unified-backend.md) for the current entrypoint, authenticated recommendation routes, feed attachment, trailer checks and Railway persistence. Earlier standalone/mock instructions below describe the session-only service.
+
 # Frontend integration
 
 This guide describes the implemented FastAPI service and Supabase schema. The

@@ -1,3 +1,5 @@
+> Unified backend update: see [unified-backend.md](unified-backend.md) for the current entrypoint, authenticated recommendation routes, feed attachment, trailer checks and Railway persistence. Earlier standalone/mock instructions below describe the session-only service.
+
 # Tandem backend handoff for teammate agents
 
 Start here before changing the frontend, recommendation integration, or backend.

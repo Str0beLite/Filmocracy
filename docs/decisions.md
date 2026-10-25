@@ -8,3 +8,5 @@ One line each: date, decision, why.
 - 2026-10-24: Store SHA-256 hashes of rotating random QR invitation tokens in private schema; defer embeddings and use only a mock recommendation provider.
 - 2026-10-24: Use existing tandem for authorized hackathon live tests with generated fixture namespaces and scoped cleanup; disable the global sweep during tests.
 - 2026-10-24: Export typed FastAPI OpenAPI and test the real Realtime wire protocol; defer TMDB writes until source/destination approval and keep inserts conflict-ignoring.
+
+- 2026-10-24: Unified FastAPI serves session and recommendation routes; SQLite stores feed ownership/bindings and replay markers, group scores average existing predictions, Supabase owns atomic voting, training stays disabled, and Railway requires a /data volume.
