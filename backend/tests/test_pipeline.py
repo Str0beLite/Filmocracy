@@ -5,17 +5,20 @@ import random
 
 os.environ["TANDEM_FAKE_ENCODER"] = "1"
 
-import numpy as np  # noqa: E402
-import pytest  # noqa: E402
-import torch  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+import numpy as np
+import pytest
+import torch
+from fastapi import Header
+from fastapi.testclient import TestClient
 
-from tandem import config, vision  # noqa: E402
-from tandem.api import create_app  # noqa: E402
-from tandem.catalog import Catalog  # noqa: E402
-from tandem.encoder import bag  # noqa: E402
-from tandem.store import Store  # noqa: E402
-from tandem.trainer import Trainer  # noqa: E402
+from tandem import config, vision
+from tandem.api import create_app
+from tandem.auth import current_user
+from tandem.catalog import Catalog
+from tandem.encoder import bag
+from tandem.recommend import boost
+from tandem.store import Store
+from tandem.trainer import Trainer
 
 FILLER_TAGS = ["dark comedy", "romance", "paris", "space opera", "aliens", "haunted house", "heist",
                "film noir", "musical", "western", "slow burn", "family drama"]
@@ -42,10 +45,25 @@ def gym_tags(rng):
     return tags
 
 
+def client(cat, store):
+    """Test client where `Authorization: Bearer <name>` signs in as <name> (default "anon")."""
+    app = create_app(catalog=cat, store=store, start_trainer=False)
+    def fake_user(authorization: str = Header("anon")):
+        return authorization.removeprefix("Bearer ")
+
+    app.dependency_overrides[current_user] = fake_user
+    return TestClient(app)
+
+
+def as_(user):
+    return {"Authorization": f"Bearer {user}"}
+
+
 @pytest.fixture
 def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CKPT_DIR", tmp_path / "ckpt")
     monkeypatch.setattr(config, "RETRAIN_EVERY", 10_000)  # trigger rounds by hand in tests
+    monkeypatch.setattr(config, "ADMIN_TOKEN", "admin")
     return make_catalog(), Store(tmp_path / "t.db")
 
 
@@ -59,7 +77,7 @@ def test_api_round_trip_and_live_training(setup):
     cat, store = setup
     rng = random.Random(1)
     targets = [i for i, m in enumerate(cat.movies) if m["title"].startswith("Underdog")]
-    with TestClient(create_app(catalog=cat, store=store, start_trainer=False)) as c:
+    with client(cat, store) as c:
         assert c.get("/health").json()["w_version"] == 0
 
         # Day 0: free-form feed tags already match films by meaning (W = I).
@@ -69,26 +87,29 @@ def test_api_round_trip_and_live_training(setup):
 
         # Several gym-feed users each love some underdog films and pass on some recs.
         for u in range(8):
-            fid = c.post("/feeds", data={"user": f"u{u}", "tags": json.dumps(gym_tags(rng))}).json()["feed_id"]
-            recs = c.get(f"/feeds/{fid}/recs").json()["recs"]
+            h = as_(f"u{u}")
+            fid = c.post("/feeds", data={"tags": json.dumps(gym_tags(rng))}, headers=h).json()["feed_id"]
+            recs = c.get(f"/feeds/{fid}/recs", headers=h).json()["recs"]
             assert len(recs) == config.N_RECS
             for r in recs[:3]:
-                c.post("/feedback", json={"rec_id": r["rec_id"], "label": "nah"})
+                assert c.post("/feedback", json={"rec_id": r["rec_id"], "label": "nah"}, headers=h).status_code == 200
             for idx in rng.sample(targets, 4):
-                c.post("/feedback", json={"feed_id": fid, "movie_id": cat.movies[idx]["id"], "label": "love"})
+                c.post("/feedback", json={"feed_id": fid, "movie_id": cat.movies[idx]["id"], "label": "love"}, headers=h)
 
         # A new gym user whose favourites are hidden = the held-out check.
-        fid = c.post("/feeds", data={"user": "new", "tags": json.dumps(gym_tags(rng))}).json()["feed_id"]
-        fav = c.post(f"/feeds/{fid}/favourites",
+        h = as_("new")
+        fid = c.post("/feeds", data={"tags": json.dumps(gym_tags(rng))}, headers=h).json()["feed_id"]
+        fav = c.post(f"/feeds/{fid}/favourites", headers=h,
                      json={"titles": [cat.movies[i]["title"] for i in targets[:5]], "holdout_frac": 1.0}).json()
         assert len(fav["matched"]) == 5 and all(m["split"] == "holdout" for m in fav["matched"])
 
-        res = c.post("/admin/retrain").json()
+        assert c.post("/admin/retrain").status_code == 403
+        res = c.post("/admin/retrain", headers={"X-Admin-Token": "admin"}).json()
         assert res["accepted"] and res["recall_new"] > res["recall_old"], res
         assert c.get("/health").json()["w_version"] == res["version"]
 
         # The new user (zero feedback of their own) now gets underdog films, credited to their gym tags.
-        recs = c.get(f"/feeds/{fid}/recs").json()["recs"]
+        recs = c.get(f"/feeds/{fid}/recs", headers=h).json()["recs"]
         hits = [r for r in recs if r["title"].startswith("Underdog")]
         assert hits and set(hits[0]["because_of"]) & set(GYM_TAGS)
         assert len(c.get("/model").json()["history"]) == 1
@@ -135,7 +156,7 @@ def test_screenshots_go_through_llama_and_ads_are_dropped(setup, monkeypatch):
 
     monkeypatch.setattr(vision, "has_api_key", lambda: True)
     monkeypatch.setattr(vision, "read_screenshots", fake_read)
-    with TestClient(create_app(catalog=cat, store=store, start_trainer=False)) as c:
+    with client(cat, store) as c:
         res = c.post("/feeds", files=[("files", ("a.png", b"\x89PNG", "image/png")),
                                       ("files", ("b.png", b"\x89PNG", "image/png"))]).json()
         assert res["dropped_as_noise"] == 1 and res["tags"] == {"gym": 0.9, "brutalist architecture": 0.2}
@@ -144,3 +165,55 @@ def test_screenshots_go_through_llama_and_ads_are_dropped(setup, monkeypatch):
 def test_llama_reply_parsing_is_tolerant():
     text = '```json\n{"is_ad_or_noise": false, "tags": [{"tag": " Gym  Rat ", "weight": 1.4}, {"tag": "", "weight": 0.5}]}\n```'
     assert vision.parse_reply(text) == (False, {"gym rat": 1.0})
+
+
+def test_group_recs_per_member_and_average(setup, monkeypatch):
+    cat, store = setup
+    monkeypatch.setattr(config, "TAG_BOOST", 10.0)  # big enough that the 8 best picks must all be heist films
+    heist = {cat.movies[i]["id"] for i in range(len(cat.movies)) if "heist" in cat.movies[i]["tags"]}
+    with client(cat, store) as c:
+        assert c.get("/me", headers=as_("a")).json()["feed_id"] is None
+        fa = c.post("/feeds", data={"tags": json.dumps({"dark comedy": 1.0})}, headers=as_("a")).json()["feed_id"]
+        c.post("/feeds", data={"tags": json.dumps({"romance": 1.0, "paris": 0.5})}, headers=as_("b"))
+        assert c.get("/me", headers=as_("a")).json()["feed_id"] == fa
+
+        # Others can't use a's feed; members without a feed can't be added.
+        assert c.get(f"/feeds/{fa}/recs", headers=as_("b")).status_code == 403
+        r = c.post("/groups", json={"user_ids": ["a", "nobody"]}, headers=as_("host"))
+        assert r.status_code == 409 and r.json()["detail"]["needs_onboarding"] == ["nobody"]
+
+        gid = c.post("/groups", json={"user_ids": ["a"]}, headers=as_("host")).json()["group_id"]
+        assert c.post(f"/groups/{gid}/join", headers=as_("b")).json()["members"] == ["a", "b"]
+        assert c.post(f"/groups/{gid}/recs", json={}, headers=as_("stranger")).status_code == 403
+
+        plain = c.post(f"/groups/{gid}/recs", json={}, headers=as_("host")).json()
+        assert set(plain["users"]) == {"a", "b"}
+        assert all(len(lst) == config.N_RECS for lst in [*plain["users"].values(), plain["group"]])
+        boosted = c.post(f"/groups/{gid}/recs", json={"boost": ["Heist "]}, headers=as_("host")).json()
+        n_heist = lambda lst: sum(r["id"] in heist for r in lst)
+        assert n_heist(plain["group"]) < 8
+        assert n_heist(boosted["group"]) >= 8 and n_heist(boosted["users"]["a"]) >= 8
+
+        shown = [r["id"] for r in plain["group"]]
+        again = c.post(f"/groups/{gid}/recs", json={"exclude": shown}, headers=as_("b")).json()
+        assert not set(shown) & {r["id"] for r in again["group"] + again["users"]["a"]}
+
+        # A yes vote by movie id trains on the voter's latest feed.
+        assert c.post("/feedback", json={"movie_id": shown[0], "label": "love"}, headers=as_("a")).status_code == 200
+        assert cat.id_to_idx[shown[0]] in store.rated_movies(fa)
+        assert c.post("/feedback", json={"movie_id": shown[0], "label": "love"}, headers=as_("nobody")).status_code == 409
+
+
+def test_boost_matches_normalised_tags_exactly():
+    movies = [{"tags": {"heist": 1}}, {"tags": {"heist movie": 1}}, {"tags": {}}]
+    out = boost(np.zeros(3), movies, [" HEIST ", ""])
+    assert out.tolist() == [config.TAG_BOOST, 0, 0]
+
+
+def test_real_auth_rejects_missing_token_and_dev_auth_passes_name(setup, monkeypatch):
+    cat, store = setup
+    with TestClient(create_app(catalog=cat, store=store, start_trainer=False)) as c:
+        assert c.get("/me").status_code == 401
+        assert c.get("/me", headers=as_("forged")).status_code == 401
+        monkeypatch.setattr(config, "DEV_AUTH", True)
+        assert c.get("/me", headers=as_("alice")).json()["user"] == "alice"

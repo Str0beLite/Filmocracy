@@ -26,6 +26,15 @@ def because_of(model, tags, movie_vec, k=3):
     return [names[j] for j in np.argsort(-contrib)[:k] if contrib[j] > 0]
 
 
+def boost(scores, movies, tags):
+    """Add TAG_BOOST to every film whose stored tags include any of `tags` (lowercased, whitespace collapsed)."""
+    wanted = {" ".join(str(t).lower().split()) for t in tags} - {""}
+    if not wanted:
+        return scores
+    hit = np.array([bool(wanted & m.get("tags", {}).keys()) for m in movies])
+    return scores + config.TAG_BOOST * hit
+
+
 def pick(scores, exclude=(), rng=random):
     """Returns [{idx, rank, explore}], where rank is the position in the pure model ranking."""
     s = scores.astype(np.float64).copy()
