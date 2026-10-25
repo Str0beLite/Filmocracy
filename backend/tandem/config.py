@@ -22,7 +22,7 @@ FAKE_ENCODER = _env("TANDEM_FAKE_ENCODER", "0") == "1"
 DIM = 384
 TAGS_PER_MOVIE = _env("TANDEM_TAGS_PER_MOVIE", 20, int)   # strongest tags kept per film when building
 
-# Meta Llama vision model that turns a feed screenshot into an IG tag vector. Any OpenAI-compatible
+# Meta Llama vision model that turns a feed screenshot into free-form tags. Any OpenAI-compatible
 # endpoint works: Meta's Llama API (default), Together, Groq, or a local Ollama (llama3.2-vision).
 LLAMA_BASE_URL = _env("LLAMA_BASE_URL", "https://api.llama.com/compat/v1/")
 LLAMA_MODEL = _env("LLAMA_MODEL", "Llama-4-Maverick-17B-128E-Instruct-FP8")

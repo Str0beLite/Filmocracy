@@ -24,7 +24,7 @@ class Translator(torch.nn.Module):
     def W(self):
         return self.W0 + self.A @ self.B.T
 
-    def forward(self, x):                       # x: (..., n_ig) -> predicted film taste (..., n_movie_tags)
+    def forward(self, x):                       # x: (..., DIM) feed vector -> predicted film taste (..., DIM)
         return F.normalize(x @ self.W0.T + (x @ self.B) @ self.A.T, dim=-1)
 
     def reg(self):
