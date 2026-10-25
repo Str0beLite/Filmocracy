@@ -73,6 +73,21 @@ journalctl --user -u filmocracy-api -f      # API logs
 journalctl --user -u filmocracy-deploy      # "deployed <sha>" after each push
 ```
 
+## Running it by hand instead
+
+To see the API and tunnel live in one terminal instead of running them as services:
+
+```bash
+systemctl --user stop filmocracy-deploy.timer filmocracy-api filmocracy-tunnel   # free port 8000
+deploy/selfhost/start.sh                  # API + tunnel, logs tagged [api] / [tunnel]; Ctrl+C stops both
+deploy/selfhost/update.sh                 # pull the latest main into ~/filmocracy-live, then restart start.sh
+```
+
+- `start.sh` refuses to run while the services are up.
+- `start.sh ~/path/to/checkout` serves that checkout's code instead, unpushed changes included.
+- Nothing auto-deploys in this mode.
+- `systemctl --user start filmocracy-api filmocracy-tunnel filmocracy-deploy.timer` goes back to the services.
+
 ## Moving to a new host
 
 `~/.config/filmocracy/backend.env` holds every production key, so it's the one file to carry over. Never commit it.
