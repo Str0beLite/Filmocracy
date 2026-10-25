@@ -48,13 +48,13 @@ HOLDOUT_NEWEST_FRAC = 0.10
 # Serving.
 N_RECS = 10
 SESSION_BATCH = _env("TANDEM_SESSION_BATCH", 2, int)   # films queued per movie-night re-score; small, so votes steer the next ones
-TEMPERATURE = _env("TANDEM_TEMPERATURE", 0.05, float)   # Gumbel noise on every ranking, in score units (taste spans ~0.28): 0.05 -> median pick ~rank 60, reruns share ~7%; 0 = pure top-k
+TEMPERATURE = _env("TANDEM_TEMPERATURE", 0.02, float)   # Gumbel noise on every ranking, in score units (top-10 taste ~0.47): 0.02 keeps ~half the picks fresh on a rerun for ~2% taste; 0 = pure top-k
 
 POSITIVE_LABELS = {"love", "seen_loved", "favourite"}
 NEGATIVE_LABELS = {"nah", "seen_disliked"}
-TAG_BOOST = _env("TANDEM_TAG_BOOST", 0.3, float)   # added to films carrying a boosted tag (each voter's feeling, or the host's): 0.3 -> ~85-100% of one person's picks fit their mood
-POP_INIT = _env("TANDEM_POP_INIT", 0.05, float)     # starting weight on the popularity prior; training learns it from there
-POP_MAX = _env("TANDEM_POP_MAX", -0.5, float)      # cap on that weight: training kept raising it until hits filled the recs; negative pushes films everyone has seen down
+TAG_BOOST = _env("TANDEM_TAG_BOOST", 0.3, float)   # added to films carrying a boosted tag (each voter's feeling, or the host's): ~86% of one person's picks fit their mood. Real nights: mood-matching films got 86% yes vs 27%
+POP_INIT = _env("TANDEM_POP_INIT", 0.1, float)      # starting weight on the popularity prior; training learns it from there (up to POP_MAX)
+POP_MAX = _env("TANDEM_POP_MAX", 0.1, float)       # cap on that weight, so hits can't crowd out the rest. Real votes favour known films (popularity alone: AUC 0.67); 0.1 puts the median pick at the ~81st rating-count percentile, near where real yes votes sit
 VOTE_PULL = _env("TANDEM_VOTE_PULL", 0.1, float)    # each vote (up to 10) pulls the taste this far toward loved films, before any retrain
 
 # Admin endpoints need X-Admin-Token.
