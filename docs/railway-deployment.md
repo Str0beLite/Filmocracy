@@ -73,9 +73,11 @@ files. Values below are placeholders/settings, never actual credentials.
 | `TANDEM_FAKE_ENCODER` | `0` (or unset); use the real frozen encoder |
 | `SWEEP_ENABLED` | `true` (default); expires disconnected participants |
 | `TRAILER_REGION` | Audience region, default `US` |
-| `LLAMA_API_KEY` | Server-only provider key, required for Instagram screenshot onboarding; tags-only feeds work without it |
-| `LLAMA_BASE_URL` | Intended OpenAI-compatible vision provider endpoint; default `https://api.llama.com/compat/v1/` |
-| `LLAMA_MODEL` | Model available from that provider; default `Llama-4-Maverick-17B-128E-Instruct-FP8` |
+| `MUSE_API_KEY` | Server-only provider key, required for Instagram screenshot onboarding; tags-only feeds work without it |
+| `MUSE_BASE_URL` | Intended OpenAI-compatible vision provider endpoint; default `https://api.meta.ai/v1` |
+| `MUSE_MODEL` | Default `muse-spark-1.3` on Meta Model API |
+| `MUSE_REASONING` | Default `low`; empty omits the parameter. Meta supports minimal/low/medium/high/xhigh/max; `none` is rejected |
+| `MUSE_MAX_TOKENS` | Default `4096`; includes internal reasoning and visible JSON output |
 
 Railway supplies `PORT`, `RAILWAY_ENVIRONMENT_ID`, and the volume's
 `RAILWAY_VOLUME_MOUNT_PATH`; do not invent these to bypass startup checks. Leave
@@ -154,7 +156,7 @@ accounts; delete only records that the test itself creates, if cleanup is needed
 - [ ] Sign in through the real frontend, call `/me`, and confirm the correct Google `sub`.
   Missing, invalid, expired or wrong-client tokens must be rejected. Token refresh /
   renewed Google sign-in must restore access; no development bearer-name bypass.
-- [ ] Test actual screenshot onboarding with the chosen Llama provider, and create
+- [ ] Test actual Muse Spark onboarding: Explore tiles become separate image calls, plain images remain whole, and ads/noise are excluded. Verify provider quota and nonempty JSON tags; then create
   feeds for three phones. Real provider API/key/quota checks are not covered by `/ready`.
 - [ ] Use one TV host plus **three distinct Google accounts** on phones (same Google
   account on multiple devices is one voter). Create a session, scan its QR on each
@@ -178,3 +180,30 @@ accounts; delete only records that the test itself creates, if cleanup is needed
 No real Google sign-in, Railway volume restart, Linux AMD64 container run or public
 phone-to-TV test has been performed yet. Local Linux ARM64 Docker tests passed; those
 results are preparation evidence, not a claim that the public deployment is verified.
+
+## Muse Spark integration
+
+Upstream `4b41190` is selectively integrated into unified screenshot uploads; keep the
+existing authenticated routes, SQLite schema/catalog, WebSocket protocol and disabled
+trainer. Install `pillow>=10` (included in both package and Docker requirements). Old
+`LLAMA_*` names are no longer read. Rename credentials in Railway to `MUSE_API_KEY`;
+a credential named `MODEL_API_KEY` in Meta examples must be assigned to this app's
+`MUSE_API_KEY`. A fresh Muse key is not automatically a valid legacy Llama key.
+
+Contract checked against Meta's primary docs: OpenAI-compatible
+`POST https://api.meta.ai/v1/chat/completions`, `muse-spark-1.3`, image data URLs in
+`user` message `image_url.url`, `response_format.json_schema`, top-level
+`reasoning_effort=low`, and `max_tokens=4096`. Parse
+`choices[0].message.content` as JSON, tolerate fenced JSON and treat unreadable
+answers as noise. Provider API failures return a retryable 503 without creating a
+partial feed. No key or image content is included in the application error response.
+
+Sources: [Chat Completions](https://dev.meta.ai/docs/protocols/chat-completions),
+[image understanding](https://dev.meta.ai/docs/image-understanding),
+[structured output](https://dev.meta.ai/docs/structured-output),
+[reasoning](https://dev.meta.ai/docs/reasoning).
+
+No local Muse credential was found during integration. Request formatting is tested
+through the real SDK against a mock transport; live Muse inference, key validity,
+account quota and actual screenshot interpretation remain unverified until a key is
+configured. Do not treat the successful Docker/session tests as a live vision test.

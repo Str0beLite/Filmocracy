@@ -4,9 +4,10 @@ uvicorn[standard]==0.34.2
 python-multipart>=0.0.12
 numpy>=1.26,<2
 pydantic>=2.7
-openai>=1.50   # client for Meta's OpenAI-compatible Llama API
+openai>=1.50   # Meta Model API (Muse Spark), OpenAI-compatible
 sentence-transformers>=3.0   # frozen tag encoder (bge-small), not an LLM
 pytest>=8
 httpx==0.28.1
 google-auth>=2.30   # standalone API verifies Google sign-in ID tokens
 requests>=2.31   # transport used by google-auth
+pillow>=10   # split Instagram Explore screenshots into tiles

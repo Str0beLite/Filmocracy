@@ -35,3 +35,5 @@ One line each: date, decision, why.
 
 - 2026-10-25: Use authenticated WebSockets for phone/TV session snapshots and heartbeats; retain HTTP mutation transactions and SSE compatibility, with SQLite revisions providing reconnect synchronization.
 - 2026-10-25: Prepare Railway with the existing unified Dockerfile and explicit dashboard settings; preserve legacy railway.json but do not depend on deprecated config-as-code support for new services.
+
+- 2026-10-25: Selectively integrate upstream 4b41190: Muse Spark via Meta Model API and pixel-based Explore tiling; retain unified Google authentication, SQLite transactions, WebSockets and disabled model training.

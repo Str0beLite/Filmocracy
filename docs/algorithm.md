@@ -15,7 +15,7 @@ A handoff guide to the backend in `backend/`. It splits the system into three pi
 ```
  feed screenshots                                   movie tag database
         │                                                   │
-        ▼  (A) Llama vision                                  ▼  (B) build_catalog.py
+        ▼  (A) tiles + Muse                                 ▼  (B) build_catalog.py
  {tag: weight}  "gym": 0.9, "dark humor": 0.6       {tag: relevance} per film
         │                                                   │
         ▼  (A) embed each tag, weighted mean                 ▼  (B) embed each tag, weighted mean, centre
@@ -78,15 +78,16 @@ These are the things that must stay true. Everything else inside a piece can cha
 
 ## Piece A: screenshot → feed embedding
 
-Flow: `POST /feeds` (multipart `files`) → `vision.read_screenshots(shots)` → `[(is_noise, {tag: w})]` per screenshot → `vision.merge()` averages the non-noise ones → `Catalog.feed_vector(tags)` → `x`.
+Flow: `POST /feeds` (multipart `files`) → `grid.split_explore()` turns each Explore screenshot into one shot per tile (non-grid images stay whole) → `vision.read_screenshots(shots)` → `[(is_noise, {tag: w})]` per screenshot → `vision.merge()` averages the non-noise ones → `Catalog.feed_vector(tags)` → `x`.
 
-- **Model:** Meta Llama vision through any OpenAI-compatible endpoint. Set `LLAMA_API_KEY`, `LLAMA_BASE_URL` and `LLAMA_MODEL`. The default is Meta's Llama API with Llama 4 Maverick.
+- **Tiles:** `grid.py` finds the thin background-colour gutters between tiles and cuts along them (XY-cut), then drops the status, search and nav bars. Tiles cut short by a white sky are grown back to full size.
+- **Model:** Meta Muse Spark (`muse-spark-1.3`) over the Meta Model API's OpenAI-compatible Chat Completions. Set `MUSE_API_KEY`, and optionally `MUSE_BASE_URL` and `MUSE_MODEL`.
 - **Prompt and schema:** `vision.PROMPT` and `vision.SCHEMA` ask for 5–15 tags covering content and vibe. Prompt quality is the biggest lever here.
 - **Parsing:** `vision.parse_reply` is tolerant of code fences and junk. An unreadable reply counts that screenshot as noise.
-- **Testing without a key:** `POST /feeds` also takes `tags` as JSON, which skips Llama.
+- **Testing without a key:** `POST /feeds` also takes `tags` as JSON, which skips Muse Spark.
 
 Ideas worth trying:
-- One Llama call per screenshot vs. batching several images.
+- One Muse Spark call per tile vs. batching several tiles in one request (up to 50 images).
 - Asking for separate "content" and "mood" tag lists with different weights.
 - Dropping near-duplicate tags.
 - Weighting screenshots by recency.

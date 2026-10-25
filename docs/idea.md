@@ -7,7 +7,7 @@
 **Users:** Friends on a movie night. A host puts Tandem on the big screen; everyone else joins on their phone.
 
 **MVP scope (must demo):**
-- Google sign-in; onboarding = upload Instagram feed screenshots once (Llama vision → tags → taste embedding, remembered).
+- Google sign-in; onboarding = upload Instagram feed screenshots once (split into Explore tiles → Muse Spark → tags → taste embedding, remembered).
 - Host screen shows a QR code; phones join the group.
 - Backend returns a rec list per member plus one for the group's average taste, with optional mood tags to boost.
 - Trailers shown on the big screen; members vote yes/no; votes train W live.

@@ -21,7 +21,7 @@ push, schema change, catalog replacement or model training was performed for thi
   for the TV/phone workflow. Migrating the separate preview API was outside this change.
 - Unified deliberately disables retraining. Votes synchronize to recommendation
   feedback without updating the model; the standalone recommendation app retains its
-  original training behavior. Screenshot ingestion needs a working Llama key/provider.
+  original training behavior. Screenshot ingestion needs a working Muse Spark key/provider.
 - The catalog has 5,000 movies, but trailer queues use only mapped metadata with
   provider-verified playable trailers, not every catalog movie. No catalog expansion.
 
@@ -114,7 +114,7 @@ access and sufficient disk space are required.
   writes use SQLite transactions; the legacy group registry and connection lifecycle
   are process-local. Railway volume services do not support replicas.
 - Configure `GOOGLE_CLIENT_ID`, `YOUTUBE_API_KEY`, exact comma-separated
-  `FRONTEND_ORIGINS`, and, for screenshots, `LLAMA_API_KEY` with the intended provider
+  `FRONTEND_ORIGINS`, and, for screenshots, `MUSE_API_KEY` with the intended provider
   URL/model. Never enable `TANDEM_DEV_AUTH` or `TANDEM_FAKE_ENCODER` in deployment.
   No Supabase credentials are required.
 - Use `wss://` for phone/TV connections and the frontend Google OAuth client matching
@@ -139,3 +139,43 @@ Official references: [volume setup](https://docs.railway.com/volumes),
 See the [Railway production handoff](railway-deployment.md) for current dashboard settings, production variables, approval boundaries and the post-deployment checklist.
 
 Release preparation also verified a Railway-style `PORT=8123` in Docker: PID 1 used `unified:app --port 8123 --workers 1`, SQLite resolved to `/data/tandem.db`, readiness reported 5,000 movies with training disabled, and unauthenticated session creation returned 401. Separate containers rejected a missing mount and `TANDEM_DEV_AUTH=1`. These were disposable local simulations, not Railway deployments.
+
+## Muse Spark re-verification (2026-10-25)
+
+Selectively integrated upstream `4b41190` on `codex/railway-deployment-prep`, retaining
+unified identity injection, tag validation, SQLite storage, WebSockets and deployment
+settings. The recommendation model/scoring, existing catalog files, checkpoints and
+SQLite schema are unchanged. Integration changes were reviewed before the approved local commit; publication and deployment remain separate approvals.
+
+- Local backend: **37 passed**. Rebuilt Docker backend: **37 passed**. These include
+  11 upstream pipeline tests, 3 upstream tiling tests, 12 unified session tests,
+  4 idempotent metadata/import tests, and 7 new Muse contract/upload/error tests.
+- Frontend session helper: **4 passed**. Scoped lint and wheel/sdist build passed;
+  the wheel includes `tandem/grid.py` and declares Pillow as a runtime dependency.
+- Image: `tandem-muse-check:20261025` (Linux ARM64), digest
+  `sha256:0ebfb534b0e43f13450d6c8d6ff6d8e661ce340c89931f6da007ad75bf772266`.
+  Existing Dockerfile installs Pillow through updated `requirements.txt`.
+- Isolated real-container workflow passed: 10 verified-trailer queue entries,
+  three simultaneous voters, six votes over two rounds, exactly-once advancement,
+  unanimous-before-mixed ranking, WebSocket delivery/reconnect, skip/end, and volume
+  persistence across container replacement. Encoder and recommendation checkpoint
+  were the actual bundled configuration; sign-in used local development identities.
+- Empty-volume verification passed again: automatic creation of all 18 tables,
+  5,000 unique movies retrieved across all 10 API pages, 200 supplementary metadata
+  records, bundled files matching the repository, 5,000-by-384 model vectors and
+  10 recommendations from the pipeline. Every table's contents remained identical
+  across recreation, including four profiles, three votes and deliberately edited
+  test movie/metadata records. Integrity was `ok`, with no foreign-key errors.
+- The original local `backend/data/tandem.db*` file hashes were unchanged. Disposable
+  workflow containers/volumes were removed; images remain available locally.
+- A real SDK mock-transport test verifies the unified upload splits a six-tile
+  image and sends image data URLs, JSON schema, `low` reasoning and 4096-token budget
+  to the configured Muse endpoint. Provider failures yield 503 with no partial feed.
+- **Live Muse inference remains unverified:** no `MUSE_API_KEY` or `MODEL_API_KEY`
+  was configured in the local process or standard backend environment files.
+  No personal screenshot was sent to Muse. Primary provider documentation was checked;
+  see [the request contract and production variables](railway-deployment.md#muse-spark-integration).
+
+Environment templates contain placeholders only; a real key encountered in a local
+example was privately preserved and removed from the template. Existing ignored
+credential files were not changed. No push, branch merge or deployment was performed during this integration.

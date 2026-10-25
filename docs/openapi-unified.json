@@ -872,7 +872,7 @@
     },
     "/feeds": {
       "post": {
-        "description": "Upload feed screenshots (read by Llama vision) and/or a JSON {tag: weight} map. Returns a feed_id.",
+        "description": "Upload screenshots (Explore tiles read by Muse Spark) or a JSON {tag: weight} map. Returns a feed_id.",
         "operationId": "create_feed_feeds_post",
         "parameters": [
           {

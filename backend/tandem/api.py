@@ -14,9 +14,10 @@ from typing import Annotated, Literal, Optional
 import numpy as np
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from openai import APIError
 from pydantic import BaseModel
 
-from . import config, vision
+from . import config, grid, vision
 from .auth import current_user, require_admin
 from .catalog import Catalog
 from .encoder import get_encoder, unit
@@ -96,7 +97,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         files: Annotated[list[UploadFile], File()] = (),
         user: str = Depends(identity),
     ):
-        """Upload feed screenshots (read by Llama vision) and/or a JSON {tag: weight} map. Returns a feed_id."""
+        """Upload screenshots (Explore tiles read by Muse Spark) or a JSON {tag: weight} map. Returns a feed_id."""
         cat = state["catalog"]
         try:
             manual = json.loads(tags) if tags.strip() else {}
@@ -107,16 +108,23 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
                 raise ValueError()
         except (ValueError, TypeError):
             raise HTTPException(422, "tags must be a JSON map of numeric weights")
-        shots = [(await f.read(), f.content_type or "image/png") for f in files]
+        shots = []
+        for f in files:
+            data = await f.read()
+            tiles = await asyncio.to_thread(grid.split_explore, data)
+            shots.extend(tiles or [(data, f.content_type or "image/png")])
         if not manual and not shots:
             raise HTTPException(400, "send at least one screenshot, or tags as JSON")
         weights, dropped = {}, 0
         if shots:
             if not vision.has_api_key():
                 raise HTTPException(
-                    503, f"screenshots need {config.LLAMA_API_KEY_ENV}; send tags instead"
+                    503, f"screenshots need {config.MUSE_API_KEY_ENV}; send tags instead"
                 )
-            weights, dropped = vision.merge(await vision.read_screenshots(shots))
+            try:
+                weights, dropped = vision.merge(await vision.read_screenshots(shots))
+            except APIError:
+                raise HTTPException(503, "Muse vision unavailable; retry or send tags instead")
         for t, w in manual.items():
             t = " ".join(str(t).lower().split())
             weights[t] = max(weights.get(t, 0.0), float(w))

@@ -14,8 +14,8 @@ backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 80
 ```
 
 `app:app` forwards to this same application. Docker and Railway use `unified:app`.
-Required: `GOOGLE_CLIENT_ID`. Optional for screenshots: `LLAMA_API_KEY`,
-`LLAMA_BASE_URL`, `LLAMA_MODEL`. Queue preparation requires `YOUTUBE_API_KEY`;
+Required: `GOOGLE_CLIENT_ID`. Optional for screenshots: `MUSE_API_KEY`,
+`MUSE_BASE_URL`, `MUSE_MODEL`, `MUSE_REASONING` (default low), `MUSE_MAX_TOKENS` (4096). Queue preparation requires `YOUTUBE_API_KEY`;
 `TRAILER_REGION` defaults to US. Set `FRONTEND_ORIGINS` to exact comma-separated
 frontend origins. `TANDEM_DATA_DIR` contains `tandem.db` and checkpoints; the movie
 vectors/catalog remain under `TANDEM_CATALOG_DIR` (default `backend/catalog`).
@@ -197,3 +197,5 @@ Main's recommendation tests remain unchanged. Historical Supabase migrations sta
 `supabase/migrations` solely to preserve the already-applied remote history.
 
 See the [Railway production handoff](railway-deployment.md) for current dashboard settings, production variables, approval boundaries and the post-deployment checklist.
+
+Screenshot uploads now split Instagram Explore grids using `tandem/grid.py` and send each crop to Muse Spark; plain images stay whole. Provider failures return 503 and create no partial feed. See the Railway handoff for the verified provider request contract and outstanding live-key check.
