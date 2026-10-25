@@ -3,7 +3,8 @@
 // whenever the big screen does.
 
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router';
+import { Settings } from 'lucide-react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 import { gsap, useMotion } from '../lib/motion';
 import { ONBOARDING, phonePath } from '../lib/flow';
 import { useRoom } from '../room/useRoom';
@@ -19,7 +20,8 @@ function Follow({ children }: { children: ReactNode }) {
   const person = s.people.find((p) => p.id === me);
   // Before you have a name, only the first two steps are open.
   const allowed = person ? ONBOARDING : ONBOARDING.slice(0, 2);
-  const want = person?.seated ? phonePath(s, person.id) : allowed.includes(pathname) ? pathname : '/phone/join';
+  const independent = pathname === '/phone/settings' || pathname === '/phone/join' || pathname === '/phone/name' || pathname === '/phone/feeling';
+  const want = independent ? pathname : person?.seated ? phonePath(s, person.id) : person && !person.feeling ? '/phone/feeling' : allowed.includes(pathname) ? pathname : '/phone/join';
 
   // The room was reset (or the server restarted): start this phone over.
   useEffect(() => {
@@ -46,6 +48,7 @@ export function PhoneFrame() {
   return (
     <PhoneStore>
       <main className="phone" ref={scope}>
+        <Link className="phone-settings-link" to="/phone/settings" aria-label="Profile settings"><Settings aria-hidden="true" /></Link>
         <Follow>
           <Outlet />
         </Follow>

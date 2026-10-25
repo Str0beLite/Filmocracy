@@ -7,6 +7,8 @@ export const device = (): 'tv' | 'phone' =>
 
 export function token(): string {
   const d = device();
+  const active = d === 'phone' ? localStorage.getItem('tandem.phone.active-profile') : null;
+  if (active && /^(guest-[a-f0-9]{64}|phone-[a-f0-9]{32})$/.test(active)) return active;
   const store = d === 'phone' && DEV_AUTH ? sessionStorage : localStorage;
   const legacy = store.getItem(`tandem.device-user.${d}`);
   if (legacy && new RegExp(`^${d}-[a-f0-9]{32}$`).test(legacy)) return legacy;

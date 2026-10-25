@@ -72,12 +72,16 @@ export function FeelingStep({
   feeling,
   onPick,
   onContinue,
+  busy = false,
+  error = '',
 }: {
   top: ReactNode;
   sub: string;
   feeling: FeelingId | null;
   onPick: (id: FeelingId) => void;
   onContinue: () => void;
+  busy?: boolean;
+  error?: string;
 }) {
   return (
     <section className="ps">
@@ -90,7 +94,7 @@ export function FeelingStep({
         {FEELINGS.map((f) => {
           const Icon = FEELING_ICONS[f.id];
           return (
-            <button key={f.id} role="radio" aria-checked={feeling === f.id} className="feeling" onClick={() => onPick(f.id)}>
+            <button key={f.id} role="radio" aria-checked={feeling === f.id} className="feeling" disabled={busy} onClick={() => onPick(f.id)}>
               <Icon aria-hidden="true" />
               {f.label}
             </button>
@@ -98,7 +102,8 @@ export function FeelingStep({
         })}
       </div>
       <div className="ps-foot">
-        <button className="btn btn-primary" disabled={!feeling} onClick={onContinue}>
+        {error && <p className="field-error" role="alert">{error}</p>}
+        <button className="btn btn-primary" disabled={!feeling || busy} onClick={onContinue}>
           Continue <ArrowRight aria-hidden="true" />
         </button>
       </div>

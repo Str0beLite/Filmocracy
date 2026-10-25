@@ -186,3 +186,7 @@ For the development-only vision demo with the unified API, serve `backend/script
 ## Individual training
 
 Open `/training` for a name, a feeling, one to three Explore screenshots, then trailer voting without a TV session. The existing automatic trainer is opt-in through `TANDEM_TRAINING_ENABLED=1`. See [the training guide](../docs/training.md).
+
+### Full-catalog trailers
+
+Set `TMDB_READ_ACCESS_TOKEN` in `backend/.env` when running locally. Session and individual training recommendations rank all 5,000 catalog films, then look up missing YouTube trailers in ranking order. Successful metadata lookups are cached in SQLite; films with no trailer are skipped and checked again after an hour. `YOUTUBE_API_KEY` enables the existing embeddability and region checks. Without it, playback eligibility trusts the listed YouTube trailer ID. The first queue can take longer while metadata is fetched.

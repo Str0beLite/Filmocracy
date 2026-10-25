@@ -75,3 +75,9 @@ Votes stay private: the server never sends how anyone voted, only who has voted 
 ## Individual training
 
 Open `/training` for a name, a feeling, one to three Explore screenshots, then trailer voting without a TV session. The existing automatic trainer is opt-in through `TANDEM_TRAINING_ENABLED=1`. See [the training guide](../docs/training.md).
+
+## Saved phone profiles and settings
+
+The phone’s gear button opens `/phone/settings`. Named profiles stay in this browser and can be switched there; these are local profiles, not Google accounts or cross-device sign-in. Each room join asks for a fresh feeling, then reuses the profile’s latest saved taste. Profiles without a saved taste upload screenshots once. Settings accepts replacement screenshots; the updated taste applies the next time that profile joins a room, preserving the active night’s feed and vote history.
+
+Verdicts now appear as soon as the round closes and advance after two seconds, including golden buzzers and fifth-trailer results. There is no suspense reveal or checkpoint pause in this flow.

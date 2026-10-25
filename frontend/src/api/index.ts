@@ -10,7 +10,7 @@
 import { device, token } from './auth';
 import { API, ApiError, http } from './http';
 import { COLORS, EMOTES, FEELINGS, art } from './data';
-import { MISS_MS, REVEAL_MS, TRAILER_GRACE_MS, TRAILER_MS, VOTE_TIMEOUT_MS, isCheckpoint } from './rules';
+import { MISS_MS, TRAILER_GRACE_MS, TRAILER_MS, VOTE_TIMEOUT_MS } from './rules';
 import type { Movie, Outcome, Phase, PickSource, Reaction, Snapshot } from './types';
 
 export type * from './types';
@@ -63,7 +63,8 @@ function toMovie(r: CatalogRow): Movie {
   };
 }
 
-function loadCatalog() {
+function loadCatalog(refresh = false) {
+  if (refresh) catalog = null;
   catalog ??= http<CatalogRow[]>('/session-catalog')
     .then((rows) => rows.forEach((r) => movies.set(r.id, toMovie(r))))
     .catch((e) => {
@@ -322,7 +323,16 @@ async function startTv() {
 
 async function startPhone() {
   if (!sessionId || !token()) return emit(PREJOIN);
+  try {
+    const saved = await http<BackendState>(`/sessions/${sessionId}`);
+    if (saved.session.status === 'ended') { setSession(null); return emit(PREJOIN); }
+  } catch (err) {
+    if (!(err instanceof ApiError) || ![403, 404].includes(err.status)) throw err;
+    setSession(null);
+    return emit(PREJOIN);
+  }
   await loadCatalog();
+  myId = (await http<{ user: string }>('/me')).user;
   await follow(sessionId);
 }
 
@@ -386,7 +396,7 @@ function trailerFor(round: { id: string; movie_id: number }): Stage {
 function verdict(round: { id: string; close_reason: string | null }): Outcome {
   const votes = state!.votes.filter((v) => v.round_id === round.id);
   const everyoneIn = round.close_reason === 'completed' && votes.length > 0 && votes.every((v) => v.value === 1);
-  return everyoneIn ? 'buzzer' : isCheckpoint(stage.round) ? 'checkpoint' : 'miss';
+  return everyoneIn ? 'buzzer' : 'miss';
 }
 
 const openRound = () => state?.voting_rounds.find((r) => !r.closed_at && r.id !== stage.roundId);
@@ -396,7 +406,7 @@ function direct() {
   const now = serverNow();
   const current = stage.roundId ? state.voting_rounds.find((r) => r.id === stage.roundId) : undefined;
   if (current?.closed_at && (stage.phase === 'trailer' || stage.phase === 'vote')) {
-    publish({ ...stage, phase: 'reveal', revealAt: now, outcome: verdict(current), shown: [...stage.shown, current.movie_id] });
+    publish({ ...stage, phase: 'result', revealAt: now, outcome: verdict(current), shown: [...stage.shown, current.movie_id] });
     return;
   }
   switch (stage.phase) {
@@ -418,10 +428,10 @@ function direct() {
       }
       break;
     case 'reveal':
-      if (now >= stage.revealAt! + REVEAL_MS) publish({ ...stage, phase: 'result' });
+      publish({ ...stage, phase: 'result', revealAt: now });
       break;
     case 'result':
-      if (stage.outcome === 'miss' && now >= stage.revealAt! + REVEAL_MS + MISS_MS) void next();
+      if (now >= stage.revealAt! + MISS_MS) void next();
       break;
   }
 }
@@ -438,6 +448,7 @@ async function next() {
   try {
     const queued = state!.session_movies.some((m) => !m.shown_at);
     if (!queued) await http(`/sessions/${sessionId}/queue`, {});
+    await loadCatalog(true);
     const { round_id } = await http<{ round_id: string | null }>(`/sessions/${sessionId}/control`, { action: 'start' });
     if (!round_id) throw new Error('Nothing left to show');
     await waitFor(() => state!.voting_rounds.some((r) => r.id === round_id));
@@ -536,27 +547,32 @@ async function run(action: string, body: Record<string, unknown>, sid: string | 
       pendingFeed = feed.feed_id;
       return { tags: Object.keys(feed.tags).slice(0, 8) };
     }
-    case 'seat':
-      if (!pendingFeed) return null;
-      return http(`/sessions/${sid}/feed`, { feed_id: pendingFeed }).catch((e) => {
+    case 'seat': {
+      const feedId = body.feedId ?? pendingFeed;
+      if (!feedId) throw new Error('Add screenshots before taking your seat.');
+      return http(`/sessions/${sid}/feed`, { feed_id: feedId }).catch((e) => {
         if (!(e instanceof ApiError) || e.status !== 409) throw e; // already seated with an earlier feed
       });
+    }
     case 'vote':
       return http(`/sessions/${sid}/votes`, { round_id: stage.roundId, value: body.vote === 'yes' ? 1 : -1 });
     case 'react':
       return http(`/sessions/${sid}/react`, { emoji: body.emoji });
-    case 'leave':
-      await http(`/sessions/${sid}/leave`, {}).catch(() => {});
-      socket?.close();
+    case 'leave': {
+      if (sid) await http(`/sessions/${sid}/leave`, {}).catch(() => {});
+      const oldSocket = socket;
       socket = null;
+      oldSocket?.close();
       setSession(null);
       state = null;
       emit(PREJOIN);
       return null;
+    }
 
     // TV
     case 'start':
       if (!state!.session_movies.some((m) => !m.shown_at)) await http(`/sessions/${sid}/queue`, {});
+      await loadCatalog(true);
       return http(`/sessions/${sid}/control`, { action: 'start' });
     case 'trailerPlaying':
       if (stage.phase === 'trailer' && body.round === stage.round) {

@@ -5,7 +5,7 @@ export interface PhoneState {
   me: string | null; // this phone's person id in the room
   setMe: (id: string | null) => void;
   feeling: FeelingId | null;
-  setFeeling: (f: FeelingId) => void;
+  setFeeling: (f: FeelingId | null) => void;
   shots: string[]; // object URLs of the chosen screenshots
   setShots: (urls: string[]) => void;
   myVotes: Record<number, 'yes' | 'no'>; // only this phone knows how it voted

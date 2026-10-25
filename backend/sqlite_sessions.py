@@ -285,9 +285,10 @@ def movies(
 @router.get("/session-catalog")
 def catalog(request: Request, user=Depends(current_user)):
     cat = request.app.state.tandem["catalog"]
+    rows = {row["id"]: row for row in request.app.state.sessions.metadata()}
     return [
-        {**cat.public(cat.id_to_idx[row["id"]]), **row}
-        for row in request.app.state.sessions.metadata()
+        {**cat.public(idx), **rows.get(movie["id"], {})}
+        for idx, movie in enumerate(cat.movies)
     ]
 
 

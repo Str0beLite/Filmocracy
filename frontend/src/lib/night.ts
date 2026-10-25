@@ -32,6 +32,7 @@ export function fmtTime(ms: number) {
 // need the laptop's Wi-Fi address instead (vite.config.ts works it out).
 export function joinUrl(invite: string) {
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-  const origin = local && __LAN_ORIGIN__ ? __LAN_ORIGIN__ : location.origin;
-  return `${origin}/phone/join#invite=${invite}`;
+  const origin = new URL(local && __LAN_ORIGIN__ ? __LAN_ORIGIN__ : location.origin);
+  if (local) origin.port = location.port;
+  return `${origin.origin}/phone/join#invite=${invite}`;
 }

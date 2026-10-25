@@ -12,13 +12,16 @@ import {
   Lock,
   Popcorn,
   ShieldCheck,
+  ScanLine,
   SmilePlus,
   Sparkles,
   Star,
   Vote,
   X,
 } from 'lucide-react';
-import { EMOTES, act, movie, type Snapshot } from '../api';
+import { http } from '../api/http';
+import { rememberProfile } from '../api/profiles';
+import { EMOTES, act, movie, type FeelingId, type Snapshot } from '../api';
 import { Avatar, Confetti, LivePill, PickSource, Poster, Wildcard, Wordmark } from '../components/ui';
 import { FEELING_ICONS } from '../lib/feelings';
 import { trailerProgress } from '../lib/night';
@@ -70,26 +73,60 @@ function useInvite() {
 
 export function PhoneJoin() {
   const invite = useInvite();
+  const { setMe, setFeeling } = usePhone();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  async function join() {
+    setBusy(true);
+    setError('');
+    try {
+      const profile = await http<{ display_name: string | null }>('/profiles/me');
+      if (!profile.display_name) { navigate('/phone/name'); return; }
+      rememberProfile(profile.display_name);
+      const { id } = await act<{ id: string }>('join', { name: profile.display_name });
+      setMe(id);
+      setFeeling(null);
+      navigate('/phone/feeling');
+    } catch (err) { setError(err instanceof Error ? err.message : 'Couldn’t join. Try again.'); }
+    finally { setBusy(false); }
+  }
   return (
-    <section className="ps">
-      <header className="ps-top">
+    <section className="ps join-page">
+      <header className="ps-top join-top">
         <Wordmark />
       </header>
-      {invite ? (
-        <>
-          <h1 className="ps-title display">You’re invited to movie night.</h1>
-          <div className="ps-foot">
-            <Link className="btn btn-primary" to="/phone/name">
-              Join the room <ArrowRight aria-hidden="true" />
-            </Link>
+      <div className="join-ticket">
+        <div className="join-ticket-body">
+          <h1 className="display join-title">
+            You’re invited to <em>movie night.</em>
+          </h1>
+          <div className="join-theater" aria-hidden="true">
+            <div className="join-screen" />
+            <div className="join-seats">
+              {[0, 1, 2].map((seat) => <div className="join-seat" key={seat}>
+                <div className="seat-back" /><div className="seat-cushion" />
+              </div>)}
+            </div>
           </div>
-        </>
-      ) : (
-        <>
-          <h1 className="ps-title display">Join movie night</h1>
-          <p className="ps-sub">Scan the QR code on the big screen with your phone’s camera.</p>
-        </>
-      )}
+        </div>
+        <div className="join-ticket-stub">
+          <Vote aria-hidden="true" />
+          <p>Your phone is your ballot.<span>Watch together. Vote privately.</span></p>
+        </div>
+      </div>
+      <div className="ps-foot join-foot">
+        {invite ? <>
+          {error && <p className="field-error" role="alert">{error}</p>}
+          <button className="btn btn-primary" disabled={busy} onClick={() => void join()}>
+            {busy ? 'Joining…' : 'Join the room'} <ArrowRight aria-hidden="true" />
+          </button>
+          <p className="fineprint">Your seat is just a tap away.</p>
+        </> : <div className="join-scan">
+          <ScanLine aria-hidden="true" />
+          <p>Scan the QR code on the big screen<span>Use your phone’s camera to join the room.</span></p>
+        </div>}
+      </div>
     </section>
   );
 }
@@ -124,7 +161,7 @@ export function PhoneSignIn() {
 
 // Your seat's name. Joins the session behind the QR code.
 export function PhoneName() {
-  const { me, setMe } = usePhone();
+  const { setMe, setFeeling } = usePhone();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -136,11 +173,14 @@ export function PhoneName() {
       busy={busy}
       error={error}
       onSubmit={async (name) => {
-        if (me) return navigate('/phone/feeling');
         setBusy(true);
         try {
+          await http('/profiles/me', { display_name: name });
+          rememberProfile(name);
+          if (!sessionStorage.getItem('tandem.phone.invite')) { navigate('/phone/settings'); return; }
           const { id } = await act<{ id: string }>('join', { name });
           setMe(id);
+          setFeeling(null);
           navigate('/phone/feeling');
         } catch (err) {
           setError(
@@ -157,20 +197,28 @@ export function PhoneName() {
 }
 
 export function PhoneFeeling() {
-  const { me, feeling, setFeeling } = usePhone();
+  const [feeling, setFeeling] = useState<FeelingId | null>(null);
   const navigate = useNavigate();
-  return (
-    <FeelingStep
-      top={<Top />}
-      sub="Filmocracy blends everyone’s answer into what it picks."
-      feeling={feeling}
-      onPick={setFeeling}
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  return <>
+    <FeelingStep top={<Top />} sub="A fresh feeling for this movie night. Your saved taste stays with you."
+      feeling={feeling} onPick={setFeeling} busy={busy}
       onContinue={() => {
-        act('feeling', { id: me, feeling });
-        navigate('/phone/screenshots');
-      }}
-    />
-  );
+        if (busy) return;
+        setBusy(true);
+        setError('');
+        void (async () => {
+          await act('feeling', { feeling });
+          const me = await http<{ feed_id: string | null }>('/me');
+          if (me.feed_id) {
+            await act('seat', { feedId: me.feed_id });
+            navigate('/phone/lobby');
+          } else navigate('/phone/screenshots');
+        })().catch((err) => setError(err instanceof Error ? err.message : 'Couldn’t save your feeling. Try again.'))
+          .finally(() => setBusy(false));
+      }} error={error} />
+  </>;
 }
 
 export function PhoneScreenshots() {

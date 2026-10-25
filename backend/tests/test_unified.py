@@ -576,3 +576,77 @@ def test_live_room_stage_feelings_and_reactions(setup):
         assert state["server_now"]
         clock.now += 60   # reactions are short-lived
         assert get(c, f"/sessions/{sid}", "c").json()["reactions"] == []
+
+
+def test_missing_metadata_is_resolved_from_full_catalog(setup, monkeypatch):
+    factory, store, _ = setup
+    monkeypatch.setenv("TMDB_READ_ACCESS_TOKEN", "test-token")
+    with TestClient(factory()) as c:
+        integration = c.app.state.integration
+        with c.app.state.sessions.transaction() as db:
+            db.execute("DELETE FROM tandem_movie_metadata")
+        requests = []
+
+        def tmdb(req):
+            requests.append(req.url.path)
+            mid = int(req.url.path.split("/")[-1])
+            return httpx.Response(200, json={
+                "id": mid, "title": "Resolved movie", "videos": {"results": [
+                    {"site": "YouTube", "type": "Trailer", "key": "abcdefghijk", "official": True}
+                ]},
+            })
+
+        integration.client = httpx.AsyncClient(transport=httpx.MockTransport(tmdb))
+        integration.playable = playable
+        made = lobby(c)
+        response = post(c, f"/sessions/{made['session_id']}/queue")
+        assert response.status_code == 200, response.text
+        assert response.json()["added"] > 0
+        rows = get(c, "/session-catalog").json()
+        assert len(rows) == 15
+        assert any(row.get("trailer_url") for row in rows)
+        assert requests
+        fid = post(c, "/feeds", "a", data={"tags": '{"tag 1":1}'}).json()["feed_id"]
+        result = post(c, f"/training/feeds/{fid}/next", "a", json={})
+        assert result.status_code == 200, result.text
+        assert result.json()["movie"]["trailer_key"] == "abcdefghijk"
+
+
+def test_saved_taste_reused_across_rooms_with_new_feeling(setup):
+    factory, store, _ = setup
+    with TestClient(factory()) as c:
+        fid = post(c, '/feeds', 'a', data={'tags': '{"tag 1":1}'}).json()['feed_id']
+        for feeling in ('cozy', 'hyped'):
+            room = post(c, '/sessions', json={'display_name': 'TV'}).json()
+            sid = room['session_id']
+            assert post(c, '/sessions/join', 'a', json={
+                'display_name': 'Alex', 'invite_token': room['invite_token'],
+            }).status_code == 200
+            snapshot = get(c, f'/sessions/{sid}', 'a').json()
+            assert not snapshot['member_state']
+            assert post(c, f'/sessions/{sid}/feeling', 'a', json={'feeling': feeling}).status_code == 200
+            assert get(c, '/me', 'a').json()['feed_id'] == fid
+            revision = get(c, f'/sessions/{sid}', 'a').json()['session']['revision']
+            assert post(c, f'/sessions/{sid}/feed', 'a', json={'feed_id': fid}).status_code == 200
+            snapshot = get(c, f'/sessions/{sid}', 'a').json()
+            assert snapshot['session']['revision'] > revision
+            assert snapshot['member_state'][0]['feeling'] == feeling
+        assert store._all('SELECT COUNT(*) AS n FROM feeds')[0]['n'] == 1
+
+
+def test_each_members_feeling_boosts_group_scores(setup):
+    from tandem.recommend import boost, score_feed
+
+    factory, store, _ = setup
+    with TestClient(factory()) as c:
+        fid = post(c, '/feeds', 'a', data={'tags': '{"tag 1":1}'}).json()['feed_id']
+        integration = c.app.state.integration
+        cat = integration.state['catalog']
+        cat.movies[0]['tags']['comedy'] = 1.0
+        feed = store.get_feed(fid)
+        _, model = integration.state['trainer'].current()
+        base = score_feed(model, feed['x'], cat.vecs, cat.prior)
+        expected = boost(base, cat.movies, ['comedy', 'funny', 'hilarious'])
+        assert np.allclose(integration.scores([feed], {'a': 'laugh'}), expected)
+        assert np.allclose(integration.scores([feed], {}), base)
+        assert expected[0] > base[0]

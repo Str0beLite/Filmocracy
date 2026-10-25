@@ -430,6 +430,7 @@ class SessionStore:
             if bound and bound[0] != fid:
                 raise HTTPException(409, "Session feed cannot be replaced")
             db.execute("INSERT OR IGNORE INTO session_feeds VALUES (?,?,?)", (sid, user, fid))
+            self.touch(db, sid)
         return {"feed_id": fid}
 
     def context(self, sid, user):
@@ -466,6 +467,15 @@ class SessionStore:
                 "limit": limit,
                 "movies": [dict(row) for row in rows],
             }
+
+    def save_metadata(self, movie_id, row):
+        with self.transaction() as db:
+            db.execute(
+                "INSERT INTO tandem_movie_metadata VALUES (?,?,?,?,?) "
+                "ON CONFLICT(provider,provider_movie_id) DO UPDATE SET "
+                "catalog_movie_id=excluded.catalog_movie_id,details=excluded.details",
+                (row["provider"], row["provider_movie_id"], None, movie_id, json.dumps(row)),
+            )
 
     def metadata(self):
         with self.transaction(write=False) as db:

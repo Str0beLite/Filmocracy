@@ -5,6 +5,7 @@ import { createBrowserRouter, redirect } from 'react-router';
 import { DevIndex } from './dev/DevIndex';
 import { TVFrame } from './tv/TVFrame';
 import * as TV from './tv/screens';
+import { PhoneSettings } from './phone/Settings';
 import { PhoneFrame } from './phone/PhoneFrame';
 import * as Phone from './phone/screens';
 import { Training } from './training/Training';
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
     element: <PhoneFrame />,
     children: [
       { index: true, element: null },
+      { path: 'settings', element: <PhoneSettings /> },
       { path: 'join', element: <Phone.PhoneJoin /> },
       { path: 'sign-in', loader: () => redirect('/phone/name') },
       { path: 'name', element: <Phone.PhoneName /> },
