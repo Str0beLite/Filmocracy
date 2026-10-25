@@ -158,7 +158,7 @@ class SessionRecommendations:
         return self.aggregate(
             [
                 boost(
-                    score_feed(model, f["x"], cat.vecs, None, *self.store.votes(f["id"])),
+                    score_feed(model, f["x"], cat.vecs, cat.prior, *self.store.votes(f["id"])),
                     cat.movies,
                     FEELING_BOOST.get(feeling, []),
                 )
