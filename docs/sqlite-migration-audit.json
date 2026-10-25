@@ -1,0 +1,19 @@
+{
+  "date": "2026-10-24",
+  "source": {
+    "movies": 200,
+    "auth_users": 0,
+    "profiles": 0,
+    "sessions": 0,
+    "votes": 0,
+    "invites": 0
+  },
+  "sqlite_movies": 5000,
+  "exact_metadata_matches": 200,
+  "mapped_to_movielens": 63,
+  "integrity": "ok",
+  "foreign_key_errors": 0,
+  "source_writes": 0,
+  "idempotent_rerun": true,
+  "supplementary_metadata_records": 200
+}

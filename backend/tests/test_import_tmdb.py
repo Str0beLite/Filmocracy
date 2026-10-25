@@ -1,7 +1,6 @@
 import unittest
 
 import httpx
-
 from import_tmdb import collect_movies, insert_movies, movie_row, request
 
 
@@ -27,30 +26,34 @@ class ImportTests(unittest.TestCase):
         self.assertIsNone(movie_row(details, "https://image.tmdb.org/t/p/"))
 
     def test_insert_is_idempotent_and_does_not_update_existing_data(self):
-        stored = {("tmdb", "1"): {"title": "Existing hand-edited title"}}
+        import json
+        import sqlite3
+        import tempfile
+        from pathlib import Path
 
-        def handler(req):
-            import json
-
-            self.assertEqual(req.method, "POST")
-            self.assertIn("resolution=ignore-duplicates", req.headers["Prefer"])
-            inserted = []
-            for row in json.loads(req.content):
-                key = (row["provider"], row["provider_movie_id"])
-                if key not in stored:
-                    stored[key] = row
-                    inserted.append(row)
-            return httpx.Response(201, json=inserted)
-
-        rows = [
-            {"provider": "tmdb", "provider_movie_id": str(i), "title": "Import"} for i in (1, 2)
-        ]
-        with httpx.Client(
-            base_url="https://test", transport=httpx.MockTransport(handler)
-        ) as client:
-            self.assertEqual(insert_movies(client, rows)["inserted"], 1)
-            self.assertEqual(insert_movies(client, rows)["inserted"], 0)
-        self.assertEqual(stored[("tmdb", "1")]["title"], "Existing hand-edited title")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "catalog.db"
+            rows = [
+                {"provider": "tmdb", "provider_movie_id": str(i), "title": "Import"} for i in (1, 2)
+            ]
+            self.assertEqual(insert_movies(path, rows)["inserted"], 2)
+            db = sqlite3.connect(path)
+            original = {"provider": "tmdb", "provider_movie_id": "1", "title": "Hand-edited"}
+            db.execute(
+                "UPDATE tandem_movie_metadata SET details=? WHERE provider_movie_id='1'",
+                (json.dumps(original),),
+            )
+            db.commit()
+            db.close()
+            self.assertEqual(insert_movies(path, rows)["inserted"], 0)
+            db = sqlite3.connect(path)
+            saved = json.loads(
+                db.execute(
+                    "SELECT details FROM tandem_movie_metadata WHERE provider_movie_id='1'"
+                ).fetchone()[0]
+            )
+            self.assertEqual(saved["title"], "Hand-edited")
+            db.close()
 
     def test_collects_100_unique_trailer_movies_without_database_calls(self):
         def handler(req):

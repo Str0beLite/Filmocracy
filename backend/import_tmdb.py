@@ -4,9 +4,10 @@ import argparse
 import json
 import os
 import re
+import sqlite3
 import time
 from datetime import date
-from urllib.parse import urlparse
+from pathlib import Path
 
 import httpx
 
@@ -114,25 +115,31 @@ def collect_movies(client, count, *, sleep=time.sleep):
     raise RuntimeError(f"Only {len(movies)} trailer-bearing movies found; no database writes made")
 
 
-def insert_movies(client, movies):
-    inserted = 0
-    for start in range(0, len(movies), 50):
-        rows = request(
-            client,
-            "POST",
-            "/rest/v1/movies",
-            params={
-                "on_conflict": "provider,provider_movie_id",
-            },
-            headers={"Prefer": "resolution=ignore-duplicates,return=representation"},
-            json=movies[start : start + 50],
+def insert_movies(database, movies):
+    """Insert public metadata only, without changing main's catalog or existing rows."""
+    from sqlite_session_store import SessionStore
+    from tandem.catalog import Catalog
+    from tandem.store import Store
+
+    store = Store(Path(database))
+    try:
+        before = store.db.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE name='tandem_movie_metadata'"
+        ).fetchone()[0]
+        count = (
+            store.db.execute("SELECT COUNT(*) FROM tandem_movie_metadata").fetchone()[0]
+            if before
+            else 0
         )
-        inserted += len(rows)
-    return {
-        "considered": len(movies),
-        "inserted": inserted,
-        "existing_unchanged": len(movies) - inserted,
-    }
+        SessionStore(store, Catalog.load(), movies)
+        after = store.db.execute("SELECT COUNT(*) FROM tandem_movie_metadata").fetchone()[0]
+        return {
+            "considered": len(movies),
+            "inserted": after - count,
+            "existing_unchanged": len(movies) - (after - count),
+        }
+    finally:
+        store.db.close()
 
 
 def main():
@@ -142,23 +149,13 @@ def main():
         "--write", action="store_true", help="Only after chat approval of source/destination"
     )
     parser.add_argument(
-        "--approved-project-ref", help="Must exactly match the approved Supabase hostname"
+        "--database", type=Path, help="Approved SQLite destination, required with --write"
     )
     args = parser.parse_args()
     if not 100 <= args.count <= 300:
         parser.error("--count must be 100–300")
-    # Validate destination and credentials before any remote request on write runs.
-    url = os.getenv("CATALOG_SUPABASE_URL", "").rstrip("/")
-    secret = os.getenv("CATALOG_SUPABASE_SECRET_KEY", "")
-    if args.write and (
-        not args.approved_project_ref
-        or not secret
-        or urlparse(url).scheme != "https"
-        or urlparse(url).netloc != f"{args.approved_project_ref}.supabase.co"
-    ):
-        parser.error(
-            "--write requires approved project ref, matching CATALOG_SUPABASE_URL and secret"
-        )
+    if args.write and not args.database:
+        parser.error("--write requires an explicitly approved --database path")
     token = os.getenv("TMDB_READ_ACCESS_TOKEN")
     if not token:
         parser.error("Set TMDB_READ_ACCESS_TOKEN in the environment")
@@ -182,12 +179,8 @@ def main():
                 )
             )
             return
-        headers = {"apikey": secret}
-        if secret.startswith("eyJ"):
-            headers["Authorization"] = f"Bearer {secret}"
-        with httpx.Client(base_url=url, headers=headers, timeout=20) as db:
-            print(json.dumps(insert_movies(db, rows)))
-    except RuntimeError as error:
+        print(json.dumps(insert_movies(args.database, rows)))
+    except (RuntimeError, sqlite3.Error) as error:
         parser.exit(1, str(error) + "\n")
 
 

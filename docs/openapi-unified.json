@@ -1,19 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AttachFeed": {
-        "properties": {
-          "feed_id": {
-            "title": "Feed Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "feed_id"
-        ],
-        "title": "AttachFeed",
-        "type": "object"
-      },
       "Body_create_feed_feeds_post": {
         "properties": {
           "files": {
@@ -28,11 +15,6 @@
           "tags": {
             "default": "",
             "title": "Tags",
-            "type": "string"
-          },
-          "user": {
-            "default": "anon",
-            "title": "User",
             "type": "string"
           }
         },
@@ -84,29 +66,6 @@
         "title": "CreateSession",
         "type": "object"
       },
-      "ErrorResponse": {
-        "properties": {
-          "detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "items": {
-                  "$ref": "#/components/schemas/ValidationIssue"
-                },
-                "type": "array"
-              }
-            ],
-            "title": "Detail"
-          }
-        },
-        "required": [
-          "detail"
-        ],
-        "title": "ErrorResponse",
-        "type": "object"
-      },
       "Favourites": {
         "properties": {
           "holdout_frac": {
@@ -126,6 +85,21 @@
           "titles"
         ],
         "title": "Favourites",
+        "type": "object"
+      },
+      "Feed": {
+        "properties": {
+          "feed_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Feed Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "feed_id"
+        ],
+        "title": "Feed",
         "type": "object"
       },
       "Feedback": {
@@ -179,59 +153,26 @@
         "title": "Feedback",
         "type": "object"
       },
-      "GroupSession": {
+      "GroupRecsReq": {
         "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
+          "boost": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Boost",
+            "type": "array"
           },
-          "ended_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ended At"
-          },
-          "expires_at": {
-            "format": "date-time",
-            "title": "Expires At",
-            "type": "string"
-          },
-          "host_user_id": {
-            "format": "uuid",
-            "title": "Host User Id",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "status": {
-            "enum": [
-              "lobby",
-              "active",
-              "ended"
-            ],
-            "title": "Status",
-            "type": "string"
+          "exclude": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Exclude",
+            "type": "array"
           }
         },
-        "required": [
-          "id",
-          "host_user_id",
-          "status",
-          "created_at",
-          "expires_at",
-          "ended_at"
-        ],
-        "title": "GroupSession",
+        "title": "GroupRecsReq",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -245,20 +186,6 @@
           }
         },
         "title": "HTTPValidationError",
-        "type": "object"
-      },
-      "HealthResponse": {
-        "properties": {
-          "status": {
-            "const": "ok",
-            "title": "Status",
-            "type": "string"
-          }
-        },
-        "required": [
-          "status"
-        ],
-        "title": "HealthResponse",
         "type": "object"
       },
       "InvitationResponse": {
@@ -294,6 +221,45 @@
           "invite_token"
         ],
         "title": "JoinSession",
+        "type": "object"
+      },
+      "NewGroup": {
+        "properties": {
+          "user_ids": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "User Ids",
+            "type": "array"
+          }
+        },
+        "title": "NewGroup",
+        "type": "object"
+      },
+      "Profile": {
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "title": "Profile",
         "type": "object"
       },
       "QueueResponse": {
@@ -342,74 +308,6 @@
         "title": "RankedMovie",
         "type": "object"
       },
-      "Ready": {
-        "properties": {
-          "movies": {
-            "title": "Movies",
-            "type": "integer"
-          },
-          "status": {
-            "const": "ready",
-            "title": "Status",
-            "type": "string"
-          },
-          "training_enabled": {
-            "title": "Training Enabled",
-            "type": "boolean"
-          },
-          "w_version": {
-            "title": "W Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "status",
-          "training_enabled",
-          "w_version",
-          "movies"
-        ],
-        "title": "Ready",
-        "type": "object"
-      },
-      "RoundParticipant": {
-        "properties": {
-          "excluded_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Excluded At"
-          },
-          "round_id": {
-            "format": "uuid",
-            "title": "Round Id",
-            "type": "string"
-          },
-          "session_id": {
-            "format": "uuid",
-            "title": "Session Id",
-            "type": "string"
-          },
-          "user_id": {
-            "format": "uuid",
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "session_id",
-          "round_id",
-          "user_id",
-          "excluded_at"
-        ],
-        "title": "RoundParticipant",
-        "type": "object"
-      },
       "RoundResponse": {
         "properties": {
           "round_id": {
@@ -431,40 +329,66 @@
         "title": "RoundResponse",
         "type": "object"
       },
-      "SessionCreated": {
+      "SQLiteGroupSession": {
         "properties": {
-          "invite_token": {
-            "title": "Invite Token",
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
             "type": "string"
           },
-          "session_id": {
+          "ended_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "host_user_id": {
+            "title": "Host User Id",
+            "type": "string"
+          },
+          "id": {
             "format": "uuid",
-            "title": "Session Id",
+            "title": "Id",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "lobby",
+              "active",
+              "ended"
+            ],
+            "title": "Status",
             "type": "string"
           }
         },
         "required": [
-          "session_id",
-          "invite_token"
+          "id",
+          "host_user_id",
+          "status",
+          "created_at",
+          "expires_at",
+          "ended_at",
+          "revision"
         ],
-        "title": "SessionCreated",
+        "title": "SQLiteGroupSession",
         "type": "object"
       },
-      "SessionJoined": {
-        "properties": {
-          "session_id": {
-            "format": "uuid",
-            "title": "Session Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "session_id"
-        ],
-        "title": "SessionJoined",
-        "type": "object"
-      },
-      "SessionMember": {
+      "SQLiteMember": {
         "properties": {
           "is_voter": {
             "title": "Is Voter",
@@ -498,7 +422,6 @@
             "type": "string"
           },
           "user_id": {
-            "format": "uuid",
             "title": "User Id",
             "type": "string"
           }
@@ -511,7 +434,184 @@
           "last_seen_at",
           "left_at"
         ],
-        "title": "SessionMember",
+        "title": "SQLiteMember",
+        "type": "object"
+      },
+      "SQLiteParticipant": {
+        "properties": {
+          "excluded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excluded At"
+          },
+          "round_id": {
+            "format": "uuid",
+            "title": "Round Id",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "round_id",
+          "user_id",
+          "excluded_at"
+        ],
+        "title": "SQLiteParticipant",
+        "type": "object"
+      },
+      "SQLiteSessionState": {
+        "properties": {
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/Profile"
+            },
+            "title": "Profiles",
+            "type": "array"
+          },
+          "round_participants": {
+            "items": {
+              "$ref": "#/components/schemas/SQLiteParticipant"
+            },
+            "title": "Round Participants",
+            "type": "array"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SQLiteGroupSession"
+          },
+          "session_members": {
+            "items": {
+              "$ref": "#/components/schemas/SQLiteMember"
+            },
+            "title": "Session Members",
+            "type": "array"
+          },
+          "session_movies": {
+            "items": {
+              "$ref": "#/components/schemas/SessionMovie"
+            },
+            "title": "Session Movies",
+            "type": "array"
+          },
+          "votes": {
+            "items": {
+              "$ref": "#/components/schemas/SQLiteVote"
+            },
+            "title": "Votes",
+            "type": "array"
+          },
+          "voting_rounds": {
+            "items": {
+              "$ref": "#/components/schemas/VotingRound"
+            },
+            "title": "Voting Rounds",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles",
+          "session",
+          "session_members",
+          "session_movies",
+          "voting_rounds",
+          "round_participants",
+          "votes"
+        ],
+        "title": "SQLiteSessionState",
+        "type": "object"
+      },
+      "SQLiteVote": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "round_id": {
+            "format": "uuid",
+            "title": "Round Id",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "value": {
+            "enum": [
+              -1,
+              1
+            ],
+            "title": "Value",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "round_id",
+          "user_id",
+          "value",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SQLiteVote",
+        "type": "object"
+      },
+      "SessionCreated": {
+        "properties": {
+          "invite_token": {
+            "title": "Invite Token",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "invite_token"
+        ],
+        "title": "SessionCreated",
+        "type": "object"
+      },
+      "SessionJoined": {
+        "properties": {
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id"
+        ],
+        "title": "SessionJoined",
         "type": "object"
       },
       "SessionMovie": {
@@ -551,58 +651,6 @@
         "title": "SessionMovie",
         "type": "object"
       },
-      "SessionState": {
-        "properties": {
-          "round_participants": {
-            "items": {
-              "$ref": "#/components/schemas/RoundParticipant"
-            },
-            "title": "Round Participants",
-            "type": "array"
-          },
-          "session": {
-            "$ref": "#/components/schemas/GroupSession"
-          },
-          "session_members": {
-            "items": {
-              "$ref": "#/components/schemas/SessionMember"
-            },
-            "title": "Session Members",
-            "type": "array"
-          },
-          "session_movies": {
-            "items": {
-              "$ref": "#/components/schemas/SessionMovie"
-            },
-            "title": "Session Movies",
-            "type": "array"
-          },
-          "votes": {
-            "items": {
-              "$ref": "#/components/schemas/VoteRecord"
-            },
-            "title": "Votes",
-            "type": "array"
-          },
-          "voting_rounds": {
-            "items": {
-              "$ref": "#/components/schemas/VotingRound"
-            },
-            "title": "Voting Rounds",
-            "type": "array"
-          }
-        },
-        "required": [
-          "session",
-          "session_members",
-          "session_movies",
-          "voting_rounds",
-          "round_participants",
-          "votes"
-        ],
-        "title": "SessionState",
-        "type": "object"
-      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -636,39 +684,6 @@
         "title": "ValidationError",
         "type": "object"
       },
-      "ValidationIssue": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "title": "Loc",
-            "type": "array"
-          },
-          "msg": {
-            "title": "Msg",
-            "type": "string"
-          },
-          "type": {
-            "title": "Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationIssue",
-        "type": "object"
-      },
       "Vote": {
         "properties": {
           "round_id": {
@@ -690,53 +705,6 @@
           "value"
         ],
         "title": "Vote",
-        "type": "object"
-      },
-      "VoteRecord": {
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "round_id": {
-            "format": "uuid",
-            "title": "Round Id",
-            "type": "string"
-          },
-          "session_id": {
-            "format": "uuid",
-            "title": "Session Id",
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "user_id": {
-            "format": "uuid",
-            "title": "User Id",
-            "type": "string"
-          },
-          "value": {
-            "enum": [
-              -1,
-              1
-            ],
-            "title": "Value",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "session_id",
-          "round_id",
-          "user_id",
-          "value",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "VoteRecord",
         "type": "object"
       },
       "VotingRound": {
@@ -800,23 +768,30 @@
         "title": "VotingRound",
         "type": "object"
       }
-    },
-    "securitySchemes": {
-      "HTTPBearer": {
-        "scheme": "bearer",
-        "type": "http"
-      }
     }
   },
   "info": {
-    "title": "Tandem unified backend",
-    "version": "0.2.0"
+    "title": "Tandem unified SQLite backend",
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
     "/admin/retrain": {
       "post": {
+        "description": "Force a round now (handy on stage).",
         "operationId": "retrain_admin_retrain_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -825,19 +800,37 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Retrain"
       }
     },
     "/feedback": {
       "post": {
+        "description": "Group votes: yes -> love, no -> nah. Without feed_id it goes on the caller's latest feed.",
         "operationId": "feedback_feedback_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -868,18 +861,25 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Feedback"
       }
     },
     "/feeds": {
       "post": {
-        "description": "Create a feed from screenshots and/or a JSON tag-weight map.",
+        "description": "Upload feed screenshots (read by Llama vision) and/or a JSON {tag: weight} map. Returns a feed_id.",
         "operationId": "create_feed_feeds_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "multipart/form-data": {
@@ -909,11 +909,6 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Create Feed"
       }
     },
@@ -928,6 +923,16 @@
             "required": true,
             "schema": {
               "title": "Fid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -962,11 +967,6 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Add Favourites"
       }
     },
@@ -980,6 +980,29 @@
             "required": true,
             "schema": {
               "title": "Fid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "boost",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Boost",
+              "type": "array"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -1004,106 +1027,213 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Recs"
       }
     },
-    "/health": {
-      "get": {
-        "operationId": "health_health_get",
+    "/groups": {
+      "post": {
+        "description": "The caller is the host (not a member unless listed). Members need a feed already.",
+        "operationId": "create_group_groups_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewGroup"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "summary": "Health"
+        "summary": "Create Group"
       }
     },
-    "/model": {
+    "/groups/{gid}": {
       "get": {
-        "description": "Current W version + every round's held-out recall, for the live chart.",
-        "operationId": "model_info_model_get",
+        "operationId": "get_group_groups__gid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gid",
+            "required": true,
+            "schema": {
+              "title": "Gid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Group"
+      }
+    },
+    "/groups/{gid}/join": {
+      "post": {
+        "operationId": "join_group_groups__gid__join_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gid",
+            "required": true,
+            "schema": {
+              "title": "Gid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Join Group"
+      }
+    },
+    "/groups/{gid}/recs": {
+      "post": {
+        "description": "One list per member from their own x, plus one from the group's average x.",
+        "operationId": "group_recs_groups__gid__recs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "gid",
+            "required": true,
+            "schema": {
+              "title": "Gid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupRecsReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Group Recs"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
         "responses": {
           "200": {
             "content": {
@@ -1114,12 +1244,146 @@
             "description": "Successful Response"
           }
         },
-        "security": [
+        "summary": "Health"
+      }
+    },
+    "/me": {
+      "get": {
+        "description": "The caller's latest feed. feed_id null = send them to onboarding (upload screenshots).",
+        "operationId": "me_me_get",
+        "parameters": [
           {
-            "HTTPBearer": []
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Me"
+      }
+    },
+    "/model": {
+      "get": {
+        "description": "Current W version + every round's held-out recall, for the live chart.",
+        "operationId": "model_info_model_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
         "summary": "Model Info"
+      }
+    },
+    "/movies": {
+      "get": {
+        "operationId": "movies_movies_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Movies"
       }
     },
     "/movies/search": {
@@ -1144,6 +1408,16 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -1166,12 +1440,95 @@
             "description": "Validation Error"
           }
         },
-        "security": [
+        "summary": "Search"
+      }
+    },
+    "/profiles/me": {
+      "get": {
+        "operationId": "profile_profiles_me_get",
+        "parameters": [
           {
-            "HTTPBearer": []
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
           }
         ],
-        "summary": "Search"
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile"
+      },
+      "post": {
+        "operationId": "update_profile_profiles_me_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSession"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Profile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Profile"
       }
     },
     "/ready": {
@@ -1181,9 +1538,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ready"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -1192,9 +1547,59 @@
         "summary": "Ready"
       }
     },
+    "/session-catalog": {
+      "get": {
+        "operationId": "catalog_session_catalog_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Catalog"
+      }
+    },
     "/sessions": {
       "post": {
-        "operationId": "create_session_sessions_post",
+        "operationId": "create_sessions_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1216,88 +1621,35 @@
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Create Session"
+        "summary": "Create"
       }
     },
     "/sessions/join": {
       "post": {
-        "operationId": "join_session_sessions_join_post",
+        "operationId": "join_sessions_join_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1319,96 +1671,41 @@
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Join Session"
+        "summary": "Join"
       }
     },
-    "/sessions/{session_id}": {
+    "/sessions/{sid}": {
       "get": {
-        "operationId": "session_state_sessions__session_id__get",
+        "operationId": "snapshot_sessions__sid__get",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "sid",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -1418,102 +1715,47 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionState"
+                  "$ref": "#/components/schemas/SQLiteSessionState"
                 }
               }
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Session State"
+        "summary": "Snapshot"
       }
     },
-    "/sessions/{session_id}/control": {
+    "/sessions/{sid}/control": {
       "post": {
-        "operationId": "control_sessions__session_id__control_post",
+        "operationId": "control_sessions__sid__control_post",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "sid",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -1539,96 +1781,89 @@
             },
             "description": "Successful Response"
           },
-          "400": {
+          "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Control"
+      }
+    },
+    "/sessions/{sid}/events": {
+      "get": {
+        "operationId": "events_sessions__sid__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sid",
+              "type": "string"
+            }
           },
-          "401": {
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
+                "schema": {}
               }
             },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
+            "description": "Successful Response"
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Control"
+        "summary": "Events"
       }
     },
-    "/sessions/{session_id}/feed": {
+    "/sessions/{sid}/feed": {
       "post": {
-        "operationId": "attach_sessions__session_id__feed_post",
+        "operationId": "bind_sessions__sid__feed_post",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "sid",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -1637,7 +1872,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AttachFeed"
+                "$ref": "#/components/schemas/Feed"
               }
             }
           },
@@ -1648,7 +1883,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AttachFeed"
+                  "$ref": "#/components/schemas/Feed"
                 }
               }
             },
@@ -1665,25 +1900,30 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Attach"
+        "summary": "Bind"
       }
     },
-    "/sessions/{session_id}/heartbeat": {
+    "/sessions/{sid}/heartbeat": {
       "post": {
-        "operationId": "heartbeat_sessions__session_id__heartbeat_post",
+        "operationId": "heartbeat_sessions__sid__heartbeat_post",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "sid",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -1699,96 +1939,41 @@
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Heartbeat"
       }
     },
-    "/sessions/{session_id}/invitation": {
+    "/sessions/{sid}/invitation": {
       "post": {
-        "operationId": "invitation_sessions__session_id__invitation_post",
+        "operationId": "invitation_sessions__sid__invitation_post",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "sid",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -1804,96 +1989,41 @@
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Invitation"
       }
     },
-    "/sessions/{session_id}/leave": {
+    "/sessions/{sid}/leave": {
       "post": {
-        "operationId": "leave_sessions__session_id__leave_post",
+        "operationId": "leave_sessions__sid__leave_post",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "sid",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -1909,96 +2039,41 @@
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Leave"
       }
     },
-    "/sessions/{session_id}/queue": {
+    "/sessions/{sid}/queue": {
       "post": {
-        "operationId": "prepare_queue_sessions__session_id__queue_post",
+        "operationId": "queue_sessions__sid__queue_post",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "sid",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -2014,96 +2089,41 @@
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Prepare Queue"
+        "summary": "Queue"
       }
     },
-    "/sessions/{session_id}/rankings": {
+    "/sessions/{sid}/rankings": {
       "get": {
-        "operationId": "rankings_sessions__session_id__rankings_get",
+        "operationId": "rankings_sessions__sid__rankings_get",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "sid",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -2116,7 +2136,7 @@
                   "items": {
                     "$ref": "#/components/schemas/RankedMovie"
                   },
-                  "title": "Response Rankings Sessions  Session Id  Rankings Get",
+                  "title": "Response Rankings Sessions  Sid  Rankings Get",
                   "type": "array"
                 }
               }
@@ -2134,25 +2154,30 @@
             "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Rankings"
       }
     },
-    "/sessions/{session_id}/votes": {
+    "/sessions/{sid}/votes": {
       "post": {
-        "operationId": "vote_sessions__session_id__votes_post",
+        "operationId": "vote_sessions__sid__votes_post",
         "parameters": [
           {
             "in": "path",
-            "name": "session_id",
+            "name": "sid",
             "required": true,
             "schema": {
               "format": "uuid",
-              "title": "Session Id",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
               "type": "string"
             }
           }
@@ -2178,82 +2203,17 @@
             },
             "description": "Successful Response"
           },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             },
-            "description": "Unprocessable Entity"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Bad Gateway"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Service Unavailable"
+            "description": "Validation Error"
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
         "summary": "Vote"
       }
     }

@@ -1,3 +1,5 @@
+> **Historical Supabase design below.** The active backend now uses SQLite and Google auth; see [unified-backend.md](unified-backend.md) for the current schema, API, SSE, migration and deployment contract. No Supabase configuration is needed.
+
 # Development movie catalog
 
 Status: **200 TMDB movies imported into tandem after explicit user approval on

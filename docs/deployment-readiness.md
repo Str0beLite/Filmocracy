@@ -1,3 +1,5 @@
+> **Historical Supabase design below.** The active backend now uses SQLite and Google auth; see [unified-backend.md](unified-backend.md) for the current schema, API, SSE, migration and deployment contract. No Supabase configuration is needed.
+
 > Unified backend update: see [unified-backend.md](unified-backend.md) for the current entrypoint, authenticated recommendation routes, feed attachment, trailer checks and Railway persistence. Earlier standalone/mock instructions below describe the session-only service.
 
 # FastAPI deployment readiness

@@ -63,6 +63,11 @@ class Store:
         r["x"] = np.frombuffer(r["x"], dtype=np.float32)
         return r
 
+    def latest_feed(self, user):
+        """A user's embedding is the x of the feed they uploaded most recently."""
+        rows = self._all("SELECT id FROM feeds WHERE user=? ORDER BY created DESC LIMIT 1", (user,))
+        return self.get_feed(rows[0]["id"]) if rows else None
+
     def all_feed_vectors(self):
         rows = self._all("SELECT id, x FROM feeds")
         return {r["id"]: np.frombuffer(r["x"], dtype=np.float32) for r in rows}

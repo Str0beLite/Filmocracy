@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 
 import httpx
-
 from session_recommendations import movie_mapping, verify_trailer, youtube_id
 
 
@@ -20,7 +19,8 @@ async def audit(rows, movies):
         async def check(row):
             async with semaphore:
                 result = {
-                    "supabase_id": row["id"],
+                    "movie_id": movies[mapping[row.get("id", row.get("source_id"))]]["id"],
+                    "source_id": row.get("source_id", row.get("id")),
                     "youtube_id": youtube_id(row),
                     "playback": "unverified",
                 }
@@ -55,7 +55,9 @@ async def audit(rows, movies):
                         result["playback"] = "verification_error"
                 return result
 
-        results = await asyncio.gather(*(check(r) for r in rows if r["id"] in mapping))
+        results = await asyncio.gather(
+            *(check(r) for r in rows if r.get("id", r.get("source_id")) in mapping)
+        )
     return {
         "overlap": len(mapping),
         "provider_verified": sum(r["playback"] == "provider_verified" for r in results),

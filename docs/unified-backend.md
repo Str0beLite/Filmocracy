@@ -1,156 +1,174 @@
-# Unified backend integration
+# Unified SQLite backend
 
-Run `uvicorn unified:app --app-dir backend` from the repository root after installing
-`backend/requirements.txt` and PyTorch. Docker and Railway use this entrypoint.
-Neither catalog nor Supabase schema changes are required. No deployment is performed.
+The feature branch retains all recommendation features from main and moves the entire
+active session backend to **main's SQLite database**. Supabase is no longer a runtime
+dependency. Its remote database and applied migration history remain unchanged.
 
-## Responsibilities and lifecycle
+## Run
 
-`unified.py` owns one Supabase HTTP client, expiry sweeper, recommendation catalog,
-frozen encoder, SQLite store and feedback reconciler. Both route sets appear in
-`/docs` and `/openapi.json`; `/health` retains `{ "status": "ok" }`, while `/ready`
-reports catalog size and model version. The recommendation trainer loads the existing
-accepted checkpoint but its worker never starts. `/admin/retrain` returns 403.
-Standalone `tandem.api:create_app` retains legacy behavior for the existing algorithm
-tests; do not deploy that unauthenticated development entrypoint.
-
-`session_recommendations.py` is the adapter. `mean_scores` is an injected aggregation
-function, separate from the existing `score_feed` and `pick` functions. It averages
-connected voters' attached-feed scores (45-second heartbeat lease) and applies the existing ranking/exploration policy to
-eligible movie indices. Model, loss, embeddings, ranking algorithm and checkpoints
-are unchanged. Session feedback is recorded for future use but does not train a model.
-
-## Frontend sequence and authentication
-
-All session and recommendation routes require a Supabase user access token in
-`Authorization: Bearer ...`. Supabase Auth verifies it. Feed creation ignores the
-multipart `user` field for ownership and uses the authenticated UUID. Legacy anonymous
-feeds cannot be claimed by guessing their IDs. Cross-user feed reads, favourites and
-feedback return 404. `/health`, `/ready` and generated documentation are public.
-
-1. TV calls `POST /sessions` with `{ "display_name": "TV" }`.
-2. Phones join through `POST /sessions/join` with the invitation token and name.
-3. Each phone calls `POST /feeds`, multipart `tags` containing a JSON numeric weight
-   map (or `files` containing screenshots when the optional Llama key is configured).
-4. Each phone attaches its owned feed using `POST /sessions/{id}/feed` with
-   `{ "feed_id": "..." }`. Attachments are idempotent and immutable within a session;
-   replacing one returns 409. This prevents old votes being attributed to a new feed.
-5. Host calls `POST /sessions/{id}/queue`, then `/control` with `{ "action": "start" }`.
-   At least one voter feed must be attached. Voters without a feed can still vote.
-6. Phones heartbeat and vote through existing endpoints. Supabase remains authoritative
-   for round IDs, eligibility, atomic advancement and disconnect leases. No algorithm
-   call runs in the accepted-vote path. Realtime subscriptions remain unchanged.
-7. Fetch `GET /sessions/{id}/rankings` for final results. Completed rounds sort by
-   unanimity first, likes descending, dislikes ascending, then predicted score descending.
-   Unanimity requires at least one vote, all accepted votes positive, and votes from
-   every non-excluded round participant. Accepted dislikes still count after a disconnect. Skipped,
-   ended or unfinished rounds are omitted. Predictions never outrank unanimous approval.
-8. Host ends through `/control` with `{ "action": "end" }`.
-
-When a queue runs out the session returns to lobby. Host prepares another batch and
-starts it. A queue request uses the existing pipeline's batch size, not all 100 slots.
-Restore the TV's stored auth session and group UUID after refresh, fetch the existing
-session snapshot, resubscribe, then fetch again after subscription confirmation or
-reconnection (see frontend-integration.md). SQLite bindings survive server restarts;
-clients do not need to attach the same feed again, though repeating attachment is safe.
-
-## IDs, eligibility and trailers
-
-The four namespaces are distinct: MovieLens `movie.id`, catalog row index, TMDB
-`movie.tmdb_id`, and Supabase `movies.id`. Join catalog `tmdb_id` to Supabase
-`provider='tmdb'` plus `provider_movie_id`; reject missing or ambiguous matches.
-`/feedback`'s `movie_id` is a **MovieLens ID**. Session queue/vote/ranking IDs refer to
-**Supabase IDs**. Feedback storage uses the mapped catalog row index. Do not rebuild
-or reorder the catalog while retaining existing SQLite events or model checkpoints.
-
-Read-only audit on 2026-10-24: 5,000 MovieLens movies, 200 Supabase movies, **63 exact
-TMDB matches**. All 63 returned video metadata from YouTube's public oEmbed endpoint.
-This proves public metadata availability, not actual playback on every TV or region.
-After the local key was corrected, YouTube Data API checks verified **62 of 63**
-as public, embeddable, not age restricted and available in the US; the remaining
-movie is excluded. See [the audit](trailer-audit.json). Actual TV playback remains
-a device check. No catalog entries were inserted, updated or deleted. Reproduce with:
+From the repository root, install PyTorch and `backend/requirements.txt`, export your
+server variables, then run one command:
 
 ```bash
-PYTHONPATH=backend backend/.venv/bin/python backend/scripts/audit_trailers.py /path/to/movies-export.json
+backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 8000
 ```
 
-The adapter accepts only HTTPS YouTube URLs with valid video IDs and successful
-YouTube Data API verification of public/embeddable status, region restrictions and
-age restrictions. `YOUTUBE_API_KEY` is required for queue preparation; `TRAILER_REGION`
-defaults to US. Keyless oEmbed checks remain available in the audit script but cannot
-establish playback eligibility and are not a runtime fallback. Invalid/unavailable
-videos are excluded. Missing keys or network/provider failures return a retryable 503;
-votes and host controls remain available. Successful checks cache for one hour.
-No provider check guarantees device playback: TV clients must handle YouTube player
-errors and let the host skip the exact current round. The existing skip endpoint
-requires `expected_round_id`; a stale skip cannot advance a newer round.
+`app:app` forwards to this same application. Docker and Railway use `unified:app`.
+Required: `GOOGLE_CLIENT_ID`. Optional for screenshots: `LLAMA_API_KEY`,
+`LLAMA_BASE_URL`, `LLAMA_MODEL`. Queue preparation requires `YOUTUBE_API_KEY`;
+`TRAILER_REGION` defaults to US. Set `FRONTEND_ORIGINS` to exact comma-separated
+frontend origins. `TANDEM_DATA_DIR` contains `tandem.db` and checkpoints; the movie
+vectors/catalog remain under `TANDEM_CATALOG_DIR` (default `backend/catalog`).
+No Supabase URL, key, JWT, SDK, or Realtime subscription is needed.
 
-All queued movies, including every shown movie, are excluded from subsequent picks.
-The database's unique session/movie constraint independently prevents races/repeats.
-No title guessing or fallback to the other 137 Supabase movies occurs.
+All user routes use main's `Authorization: Bearer <Google ID token>` and Google `sub`
+as the user ID. `TANDEM_DEV_AUTH=1` supports main's local development identity shortcut;
+it must never be used in production, and unified refuses it on Railway. For deployment,
+use Google's configured web client and refresh sign-in tokens through the frontend.
+Tokens are not stored in SQLite or localStorage by our TV helper.
 
-## Failure recovery and feedback
+## What stays from main
 
-Queue failures leave votes and existing queues intact: 409 means no attached feed or
-no eligible movies; 503 means retry queue preparation later. Existing queued rounds
-continue; the host can skip/end even during a recommendation outage. Never retry a
-vote merely because recommendation synchronization is delayed. Re-fetch session state
-when an HTTP request's outcome is uncertain.
+The existing model, checkpoints, encoder, scoring, exploration, tag boosting, SQLite
+feeds/recs/events/models schema, latest-feed behavior, Google auth and tests are kept.
+All `/me`, `/feeds`, `/feedback`, `/groups`, `/model`, `/movies/search` and admin routes
+remain exposed. Unified intentionally disables the training worker and returns 403
+from `/admin/retrain`, even with the admin header, to preserve the no-retraining
+constraint. Standalone `tandem.api:app` retains main's admin-protected training behavior.
+Only synthetic test catalogs and temporary checkpoints are trained by existing tests.
 
-Every 10 seconds the reconciler reads confirmed Supabase votes for sessions with feed
-bindings, maps movie IDs, and writes `love` for +1 or `nah` for -1 to the original store.
-It also sees direct Supabase RPC votes. It never assumes a successful stale vote request
-inserted a vote. SQLite `vote_sync` markers deduplicate completed writes. A crash between
-an event write and its marker replays that same label; the store replaces the existing
-feed/movie label. Transient failures retry after restart. This is eventually consistent
-across two databases, not a distributed transaction. Votes from users without attached
-feeds or unmapped catalog movies cannot be mirrored. The source votes remain intact.
+Main's `/groups` remains its in-memory recommendation-preview API, with per-member
+and average-vector lists, optional mood boosts and caller-provided exclusions. Durable
+QR/voting sessions use `/sessions`, with averaged individual scores, server-maintained
+shown history, validated trailers and final voting rankings. Both use **MovieLens movie
+IDs** externally. A group ID and a session ID are separate and cannot be interchanged.
 
-Integration adds only three **SQLite** tables: session_feeds, session_predictions and
-vote_sync. Supabase migrations, RLS, publications, data and credentials are unchanged.
+`/health` includes main's `ok`, `w_version`, `movies`, `events`, `vision` fields plus
+`status`. `/ready` checks SQLite and reports the loaded catalog and training status.
 
-## Railway and persistence
+## SQLite schema and migration
 
-Use backend as the service root, its Dockerfile, **one replica and one Uvicorn worker**.
-The Railway manifest requires `/data`, pins one replica and disables sleeping.
-Mount a Railway persistent volume at `/data` and set `TANDEM_DATA_DIR=/data`. Persist
-`tandem.db` and `checkpoints/` together. Existing deployed data must be backed up and
-copied to the volume before replacing an ephemeral deployment; do not initialize over
-or delete the previous store. No such migration or deployment has been done here.
-Startup refuses a Railway environment without the `/data` volume declaration or with
-a different data directory. Local tests close and reopen a real SQLite file to verify
-feeds, bindings, votes and synchronization markers survive a restart. A remote volume
-has **not** been provisioned or restart-tested; environment declarations alone do not
-prove the remote mount is operational. Without persistent storage this deployment is
-unsupported and feed ownership/bindings would be lost on redeploy.
+`tandem/session_schema.sql` is an additive, idempotent SQLite migration. It adds:
 
-Required server environment: SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY,
-SUPABASE_SECRET_KEY, FRONTEND_ORIGINS (exact comma-separated origins).
-YOUTUBE_API_KEY is also required to prepare recommendation queues.
-Optional: LLAMA_API_KEY, LLAMA_BASE_URL, LLAMA_MODEL for screenshots;
-TRAILER_REGION for trailer checks;
-TANDEM_CATALOG_DIR (default bundled backend/catalog), TANDEM_DATA_DIR;
-SWEEP_ENABLED (true normally, false for fixture-isolated tests).
-Do not set TANDEM_FAKE_ENCODER=1 in deployment. No training-enable variable is exposed.
-Use ignored local environment files or Railway secret variables. Docker excludes
-`.env*`, runtime databases, local environments and build output.
+- `tandem_profiles`: Google user ID and display name.
+- `tandem_movies`: all 5,000 main catalog entries with MovieLens/TMDB IDs and immutable
+  model vector indices.
+- `tandem_movie_metadata`: provider/TMDB identity, original source ID, optional mapped
+  MovieLens ID and the complete public movie metadata JSON.
+- `tandem_sessions`, `tandem_members`, `tandem_invites`: host, lifecycle, heartbeat leases,
+  member roles and SHA-256 hashes of random rotating invitation tokens.
+- `tandem_queue`, `tandem_rounds`, `tandem_electorate`, `tandem_votes`: ordered queue,
+  unique round UUIDs, fixed electorate snapshots and one vote per round/user.
+- `session_feeds`, `session_predictions`, `vote_sync`: immutable session/feed associations,
+  prediction tie-breakers and feedback synchronization markers.
+
+Foreign keys, unique session/movie and round/user keys, a partial unique open-round
+index, status/value checks, and `BEGIN IMMEDIATE` transactions enforce consistency.
+Authorization is checked in the API/store for every operation; SQLite is never exposed
+directly to phones. All database access shares main's connection lock. Accepted votes
+and automatic round advancement commit together. Concurrent votes, duplicate requests,
+stale round IDs, skips, end requests and expiry checks cannot advance a round twice.
+
+Read-only source audit on 2026-10-24 found **200 movies**, **0 auth users**, and zero
+profiles, sessions, members, invitations, rounds, queued movies, electorate rows or
+votes. The complete movie snapshot is `catalog/session_movie_metadata.json`. No account
+or live-session identity conversion is needed. Original source IDs are retained as
+metadata only; they are not assumed to equal MovieLens IDs.
+
+The SQLite `tandem_movies` table contains **all 5,000 MovieLens films**. The
+5,000-movie JSON/NumPy model catalog is untouched. `GET /movies` provides authorized
+pagination and reports `total: 5000`; `/ready` reports `sqlite_movies: 5000`. Exactly 63 metadata records map by
+TMDB ID into that catalog; the other 137 are retained in SQLite without being offered
+to a model that has no vector for them. Earlier YouTube verification accepted 62 of
+those 63 in the US. Runtime rechecks public/embeddable, region and age restrictions;
+provider errors fail queue preparation safely. No catalog was expanded or overwritten.
+
+To copy the approved snapshot to an existing or new SQLite database:
+
+```bash
+PYTHONPATH=backend backend/.venv/bin/python backend/scripts/migrate_sqlite.py --database backend/data/tandem.db
+```
+
+This script never contacts Supabase. Inserts ignore existing provider IDs, preserving
+hand-edited metadata and all existing feeds, events and model rows. It runs SQLite
+integrity/foreign-key checks and reports before/after recommendation-table counts.
+It is safe to repeat. SQLite runtime data is gitignored. Keep the remote source until
+the team separately approves any decommissioning; this work performs no remote writes.
+
+## Frontend sequence
+
+1. Google sign-in, then `GET /me`. Create a feed using multipart `POST /feeds` with
+   `tags` JSON or screenshots. Feed ownership comes from verified Google identity.
+2. TV calls `POST /sessions` with `{"display_name":"TV"}`. The QR contains a frontend
+   join URL with the returned invitation token in its fragment.
+3. Phones call `POST /sessions/join` with `display_name` and `invite_token`. If a phone
+   already has a feed, its latest feed is bound automatically. Otherwise it can onboard
+   and attach its owned feed with `POST /sessions/{id}/feed` and `{"feed_id":"..."}`.
+   Bindings cannot be replaced within an existing session; retries are idempotent.
+4. Host calls `/queue`, then `/control` with `{"action":"start"}`. Queue batches use
+   the unchanged pipeline's pick function over eligible trailers. Every queued/shown
+   movie is excluded from later batches, with a database uniqueness backstop.
+5. Phones heartbeat every 10 seconds and call `/votes` with `round_id` and value +1/-1.
+   Only the caller's own vote changes. A snapshot electorate and 45-second leases keep
+   disconnected phones from blocking completion. New joins wait until the next round.
+6. Host can `/control` with `skip` plus `expected_round_id`, or `end`. Empty rounds do
+   not spin automatically. Exhausting the queue returns to lobby; prepare/start again.
+7. `GET /sessions/{id}/rankings` sorts completed rounds by unanimous approval, likes,
+   dislikes, then predicted score. All accepted dislikes count even if their voter
+   disconnects. Predictions never outrank unanimous positive votes.
+
+`GET/POST /profiles/me` reads or changes only the caller's display name. Session
+snapshots include member profiles; unrelated session data returns 404. `/session-catalog`
+provides mapped movie metadata/trailer links. API schemas are generated in
+[openapi-unified.json](openapi-unified.json) and served at `/docs`.
+
+## Realtime and reconnect
+
+Use authenticated **Server-Sent Events**, `GET /sessions/{id}/events`. Use `fetch` with
+an Authorization header and parse SSE frames; native EventSource cannot set that
+header. Do not put access tokens in URLs. Each `event: state` contains a complete
+session snapshot; `id` is the persisted SQLite session revision. The stream checks for
+changes every second and sends keepalives. Initial and reconnected streams always send
+a fresh snapshot, so missed events do not require a replay log. Clients should apply
+newer revisions and reconnect with a refreshed Google token after network/auth failure.
+A member who leaves loses snapshot access and the stream emits `access_revoked`.
+
+The TV stores only its session UUID. `frontend/session-client.js` restores Google
+identity through `/me` and validates host ownership before reuse; network/401 failures
+preserve the UUID for retry, rather than silently creating a new session. The UI must
+provide a fresh Google ID token through `getToken`. Rotate the invitation after refresh
+to display a new QR; raw invitation tokens are not stored by the helper.
+
+The session snapshot is a consistent SQLite read transaction. Background sweeps and
+feedback sync run every 10 seconds in the single service process. No Supabase Realtime,
+RLS, secret/service-role access or database RPC is used by the active backend.
+
+## Failure handling and persistence
+
+Voting/advancement uses its own committed SQLite transaction. A separate, retryable
+feedback transaction records `love`/+1 and `nah`/-1 using the original store's catalog
+row-index format. Event and sync-marker writes commit together, avoiding partial
+feedback replacement. A recommendation/provider or feedback failure never undoes an
+accepted vote. Existing queues continue; retry queue preparation or use host skip/end.
+
+Railway requires a persistent volume at `/data`, `TANDEM_DATA_DIR=/data`, one replica
+and one Uvicorn worker. The manifest requires the mount and disables sleeping. Both
+SQLite and existing model checkpoints must survive together. Local file-close/reopen
+tests verify persistence; an actual Railway volume/restart and Docker image build have
+not been exercised here. No deployment or push is performed. A wheel installation
+must point TANDEM_CATALOG_DIR at the existing catalog plus metadata snapshot.
 
 ## Verification
 
 ```bash
 PYTHONPATH=backend TANDEM_FAKE_ENCODER=1 backend/.venv/bin/python -m pytest backend/tests -q
 node --test frontend/session-client.test.mjs
-backend/.venv/bin/python -m build backend --outdir /tmp/tandem-unified-dist
+backend/.venv/bin/python -m build backend --outdir /tmp/tandem-sqlite-dist
 ```
 
-A wheel installation must set TANDEM_CATALOG_DIR to the existing catalog directory;
-the Docker image copies both catalog files explicitly.
-
-The existing training tests train only synthetic catalogs and temporary checkpoints.
-The new unified integration test uses a stateful Supabase double and a temporary SQLite
-file; it covers three phones, ownership, queue selection, voting/advancement, feedback
-replay, rankings, termination, restart persistence, and existing recommendation routes.
-The live API and Realtime suites also passed against uniquely scoped development
-fixtures during this integration. They remain separate and skip without explicitly
-exported test credentials. They create isolated fixtures; do not enable them against production.
+The unified tests use real temporary SQLite databases for three phones and a TV,
+concurrent voting/advancement, host controls, invitations, disconnects, authorization,
+provider/feedback failure recovery, idempotent metadata copies, restart persistence,
+SSE snapshots/reconnection, original recommendation routes and the exported contract.
+Main's recommendation tests remain unchanged. Historical Supabase migrations stay in
+`supabase/migrations` solely to preserve the already-applied remote history.

@@ -1,52 +1,50 @@
-// Pass a singleton Supabase client configured with auth.persistSession:true and
-// auth.autoRefreshToken:true. This module has no dependency on the TV UI framework.
+// The UI supplies a fresh Google ID token from its sign-in flow. Tokens are never stored here.
 const sessionKey = "tandem.tv.session";
 
-export function createTvSessionClient(supabase, storage = globalThis.localStorage) {
-  let restoring;
-
-  async function identity() {
-    if (!restoring) {
-      restoring = (async () => {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
-        if (data.session) return data.session;
-        const result = await supabase.auth.signInAnonymously();
-        if (result.error) throw result.error;
-        return result.data.session;
-      })().catch((error) => {
-        restoring = undefined;
-        throw error;
-      });
+export function createTvSessionClient({ apiUrl = "", getToken, fetchImpl = globalThis.fetch,
+  storage = globalThis.localStorage }) {
+  async function call(path, body) {
+    const token = await getToken();
+    if (!token) throw new Error("Google sign-in required");
+    const response = await fetchImpl(`${apiUrl}${path}`, {
+      method: body ? "POST" : "GET",
+      headers: { Authorization: `Bearer ${token}`, ...(body ? { "Content-Type": "application/json" } : {}) },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    if (!response.ok) {
+      const error = new Error(`Backend request failed (${response.status})`);
+      error.status = response.status;
+      throw error;
     }
-    return restoring;
+    return response.json();
   }
-
   return {
-    identity,
+    identity: () => call("/me"),
     async restore() {
-      const auth = await identity();
       const id = storage.getItem(sessionKey);
       if (!id) return null;
-      const { data, error } = await supabase.from("group_sessions")
-        .select("*").eq("id", id).maybeSingle();
-      if (error) throw error;
-      if (!data || data.host_user_id !== auth.user.id || data.status === "ended"
-          || Date.parse(data.expires_at) <= Date.now()) {
+      const auth = await this.identity();
+      let state;
+      try { state = await call(`/sessions/${id}`); }
+      catch (error) {
+        if (error.status !== 404) throw error;
         storage.removeItem(sessionKey);
         return null;
       }
-      return data;
+      const session = state.session;
+      if (session.host_user_id !== auth.user || session.status === "ended"
+          || Date.parse(session.expires_at) <= Date.now()) {
+        storage.removeItem(sessionKey);
+        return null;
+      }
+      return session;
     },
     async create(displayName = "TV") {
-      await identity();
-      // Reuse a session after refresh; rotate its invitation separately to show QR again.
       const previous = await this.restore();
       if (previous) return { session_id: previous.id };
-      const { data, error } = await supabase.rpc("create_session", { p_name: displayName });
-      if (error) throw error;
-      storage.setItem(sessionKey, data.session_id);
-      return data;
+      const result = await call("/sessions", { display_name: displayName });
+      storage.setItem(sessionKey, result.session_id);
+      return result;
     },
   };
 }

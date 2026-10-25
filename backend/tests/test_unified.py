@@ -1,277 +1,340 @@
-"""Unified routes use an isolated stateful Supabase double; no live writes."""
+"""Real SQLite integration, Google auth doubles, no Supabase or model writes."""
 
 import asyncio
 import json
 import os
-from uuid import uuid4
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 os.environ["TANDEM_FAKE_ENCODER"] = "1"
 
 import httpx
 import numpy as np
 import pytest
-from fastapi import HTTPException
+from fastapi import Header, HTTPException
 from fastapi.testclient import TestClient
-
-from session_recommendations import final_ranking, mean_scores, movie_mapping
+from session_recommendations import final_ranking, mean_scores, verify_trailer
+from sqlite_sessions import session_events
+from tandem import config
+from tandem.auth import current_user
 from tandem.catalog import Catalog
 from tandem.encoder import bag
 from tandem.store import Store
 from unified import create_app
 
 
-class Database:
+class Clock:
     def __init__(self):
-        self.sid = str(uuid4())
-        self.members = []
-        self.queue = []
-        self.rounds = []
-        self.participants = []
-        self.votes = []
-        self.session = {"id": self.sid, "host_user_id": "tv", "status": "lobby"}
-        self.client = httpx.AsyncClient()
-        self.movies = [
-            {
-                "id": i + 100,
-                "provider": "tmdb",
-                "provider_movie_id": str(i + 900),
-                "trailer_provider": "YouTube",
-                "trailer_url": "https://www.youtube.com/watch?v=abcdefghijk",
-            }
-            for i in range(12)
-        ]
+        self.now = 1800000000
 
-    async def request(self, method, path, token=None, params=None, **kwargs):
-        if path == "/auth/v1/user":
-            if token not in ("tv", "a", "b", "c", "outsider"):
-                raise HTTPException(401)
-            return {"id": token}
-        table = path.rsplit("/", 1)[-1]
-        if table != "movies" and token and token != "tv" and token not in self.members:
-            return []
-        return {
-            "group_sessions": [self.session],
-            "movies": self.movies,
-            "session_members": [
-                {"user_id": u, "is_voter": True, "left_at": None} for u in self.members
-            ],
-            "session_movies": self.queue,
-            "voting_rounds": self.rounds,
-            "round_participants": self.participants,
-            "votes": self.votes,
-        }[table]
+    def __call__(self):
+        return self.now
 
-    def advance(self):
-        shown = {r["movie_id"] for r in self.rounds}
-        remaining = [m for m in self.queue if m["movie_id"] not in shown]
-        if not remaining:
-            return None
-        rid = str(uuid4())
-        self.rounds.append({"id": rid, "movie_id": remaining[0]["movie_id"], "close_reason": None})
-        self.participants.extend(
-            {"round_id": rid, "user_id": u, "excluded_at": None} for u in self.members
-        )
-        return rid
 
-    async def rpc(self, name, body, token=None, **kwargs):
-        if name == "create_session":
-            return {"session_id": self.sid, "invite_token": "x" * 64}
-        if name == "join_session":
-            self.members.append(token)
-            return self.sid
-        if name == "enqueue_movies":
-            for mid in body["p_movies"]:
-                if mid not in {m["movie_id"] for m in self.queue}:
-                    self.queue.append({"movie_id": mid})
-            return len(body["p_movies"])
-        if name == "control_session":
-            if body["p_action"] == "end":
-                self.session["status"] = "ended"
-                return None
-            return self.advance()
-        if name == "cast_vote":
-            self.votes.append(
-                {"round_id": body["p_round"], "user_id": token, "value": body["p_value"]}
-            )
-            if sum(v["round_id"] == body["p_round"] for v in self.votes) == len(self.members):
-                next(r for r in self.rounds if r["id"] == body["p_round"])["close_reason"] = (
-                    "completed"
-                )
-                return self.advance()
-            return body["p_round"]
+def auth(authorization: str = Header("")):
+    token = authorization.removeprefix("Bearer ")
+    if token not in {"tv", "a", "b", "c", "outsider"}:
+        raise HTTPException(401, "Google sign-in required")
+    return token
 
 
 @pytest.fixture
-def components(tmp_path, monkeypatch):
+def setup(tmp_path, monkeypatch):
     monkeypatch.setenv("SWEEP_ENABLED", "false")
     movies = [
         {"id": i + 50, "tmdb_id": i + 900, "title": f"Movie {i}", "tags": {f"tag {i}": 1}}
-        for i in range(12)
+        for i in range(15)
     ]
     cat = Catalog(movies, np.stack([bag(m["tags"]) for m in movies]))
-    return cat, Store(tmp_path / "tandem.db"), Database()
+    metadata = [
+        {
+            "source_id": i + 100,
+            "provider": "tmdb",
+            "provider_movie_id": str(i + 900),
+            "title": f"Movie {i}",
+            "trailer_provider": "youtube",
+            "trailer_url": "https://www.youtube.com/watch?v=abcdefghijk",
+        }
+        for i in range(15)
+    ]
+    store = Store(tmp_path / "tandem.db")
+    clock = Clock()
+
+    def factory(store=store):
+        app = create_app(cat, store, metadata, clock)
+        app.dependency_overrides[current_user] = auth
+        return app
+
+    yield factory, store, clock
+    store.db.close()
 
 
-def test_unified_round_trip_and_restart(components, monkeypatch):
-    cat, store, db = components
+def post(c, path, user="tv", **kwargs):
+    return c.post(path, headers={"Authorization": f"Bearer {user}"}, **kwargs)
 
-    async def playable(row):
-        return True
 
-    with TestClient(create_app(cat, store, db)) as c:
-        monkeypatch.setattr(c.app.state.integration, "playable", playable)
+def get(c, path, user="tv"):
+    return c.get(path, headers={"Authorization": f"Bearer {user}"})
 
-        def post(path, user="tv", **kwargs):
-            return c.post(path, headers={"Authorization": f"Bearer {user}"}, **kwargs)
 
-        assert c.post("/feeds", data={"tags": '{"tag 1":1}'}).status_code == 401
-        assert post("/sessions", json={"display_name": "TV"}).status_code == 200
-        sid = db.sid
-        for user in ("a", "b", "c"):
-            assert (
-                post(
-                    "/sessions/join", user, json={"display_name": user, "invite_token": "x" * 64}
-                ).status_code
-                == 200
-            )
-            fid = post("/feeds", user, data={"tags": '{"tag 1":1}', "user": "spoof"}).json()[
-                "feed_id"
-            ]
-            assert store.get_feed(fid)["user"] == user
-            recs = c.get(f"/feeds/{fid}/recs", headers={"Authorization": f"Bearer {user}"}).json()
-            rec_id = recs["recs"][0]["rec_id"]
-            assert (
-                post("/feedback", "outsider", json={"rec_id": rec_id, "label": "nah"}).status_code
-                == 404
-            )
-            assert (
-                post(
-                    f"/feeds/{fid}/favourites", "outsider", json={"titles": ["Movie 1"]}
-                ).status_code
-                == 404
-            )
-            assert (
-                c.get(
-                    f"/feeds/{fid}/recs", headers={"Authorization": "Bearer outsider"}
-                ).status_code
-                == 404
-            )
-            assert post(f"/sessions/{sid}/feed", user, json={"feed_id": fid}).status_code == 200
-        assert post(f"/sessions/{sid}/queue", "a").status_code == 403
-        assert post(f"/sessions/{sid}/queue").json()["added"] > 0
-        rid = post(f"/sessions/{sid}/control", json={"action": "start"}).json()["round_id"]
-        for user in ("a", "b", "c"):
-            response = post(f"/sessions/{sid}/votes", user, json={"round_id": rid, "value": 1})
-            assert response.status_code == 200
-        assert response.json()["round_id"] != rid
-
-        # Scoring outage does not affect accepted voting or host termination.
-        async def unavailable(row):
-            raise RuntimeError("offline")
-
-        monkeypatch.setattr(c.app.state.integration, "playable", unavailable)
-        assert post(f"/sessions/{sid}/queue").status_code == 503
-        before = {m["movie_id"] for m in db.queue}
-        monkeypatch.setattr(c.app.state.integration, "playable", playable)
-        post(f"/sessions/{sid}/queue")
-        assert len(db.queue) == len({m["movie_id"] for m in db.queue})
-        assert before <= {m["movie_id"] for m in db.queue}
-        assert len(db.queue) > len(before)
-        original_add_event = store.add_event
-
-        def offline(*args, **kwargs):
-            raise RuntimeError("SQLite temporarily unavailable")
-
-        monkeypatch.setattr(store, "add_event", offline)
-        with pytest.raises(RuntimeError):
-            asyncio.run(c.app.state.integration.reconcile())
-        assert len(db.votes) == 3
-        monkeypatch.setattr(store, "add_event", original_add_event)
-        asyncio.run(c.app.state.integration.reconcile())
-        asyncio.run(c.app.state.integration.reconcile())
-        assert store.count_events() == 3
-        assert {e["label"] for e in store.events()} == {"love"}
-        ranks = c.get(f"/sessions/{sid}/rankings", headers={"Authorization": "Bearer tv"}).json()
-        assert ranks[0]["unanimous"]
-        assert post("/admin/retrain").status_code == 403
-        assert c.get("/model", headers={"Authorization": "Bearer a"}).status_code == 200
+def lobby(c):
+    made = post(c, "/sessions", json={"display_name": "TV"}).json()
+    for user in ("a", "b", "c"):
+        fid = post(c, "/feeds", user, data={"tags": '{"tag 1":1}'}).json()["feed_id"]
         assert (
-            c.get("/movies/search?q=Movie", headers={"Authorization": "Bearer a"}).status_code
+            post(
+                c,
+                "/sessions/join",
+                user,
+                json={"display_name": user, "invite_token": made["invite_token"]},
+            ).status_code
             == 200
         )
-        assert post(f"/sessions/{sid}/control", json={"action": "end"}).status_code == 200
-        paths = c.get("/openapi.json").json()["paths"]
-        assert "/sessions" in paths and "/feeds" in paths
-    path = store.db.execute("PRAGMA database_list").fetchone()[2]
+        assert (
+            post(c, f"/sessions/{made['session_id']}/feed", user, json={"feed_id": fid}).status_code
+            == 200
+        )
+    return made
+
+
+async def playable(row):
+    return True
+
+
+def test_real_sqlite_tv_three_phones_concurrent_votes_and_controls(setup, monkeypatch):
+    factory, store, clock = setup
+    with TestClient(factory()) as c:
+        monkeypatch.setattr(c.app.state.integration, "playable", playable)
+        assert c.post("/sessions", json={"display_name": "TV"}).status_code == 401
+        assert get(c, "/ready").json()["database"] == "sqlite"
+        assert get(c, "/movies?limit=2").json()["total"] == 15
+        assert len(get(c, "/movies?limit=2").json()["movies"]) == 2
+        assert get(c, "/health").json()["movies"] == 15
+        made = lobby(c)
+        sid = made["session_id"]
+        assert get(c, f"/sessions/{sid}", "outsider").status_code == 404
+        assert post(c, f"/sessions/{sid}/queue", "a").status_code == 403
+        assert post(c, f"/sessions/{sid}/queue").json()["added"] > 0
+        state = get(c, f"/sessions/{sid}").json()
+        assert all(50 <= m["movie_id"] < 65 for m in state["session_movies"])
+        rid = post(c, f"/sessions/{sid}/control", json={"action": "start"}).json()["round_id"]
+        assert (
+            post(c, f"/sessions/{sid}/votes", json={"round_id": rid, "value": 1}).status_code == 403
+        )
+        assert post(c, f"/sessions/{sid}/control", "a", json={"action": "end"}).status_code == 403
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            responses = list(
+                pool.map(
+                    lambda user: post(
+                        c, f"/sessions/{sid}/votes", user, json={"round_id": rid, "value": 1}
+                    ),
+                    ("a", "b", "c"),
+                )
+            )
+        assert all(r.status_code == 200 for r in responses)
+        state = get(c, f"/sessions/{sid}").json()
+        assert len(state["voting_rounds"]) == 2 and len(state["votes"]) == 3
+        second = next(r["id"] for r in state["voting_rounds"] if r["closed_at"] is None)
+        assert (
+            post(c, f"/sessions/{sid}/votes", "a", json={"round_id": rid, "value": -1}).json()[
+                "round_id"
+            ]
+            == second
+        )
+        assert len(get(c, f"/sessions/{sid}").json()["votes"]) == 3
+        post(c, f"/sessions/{sid}/votes", "a", json={"round_id": second, "value": -1})
+        clock.now += 44
+        post(c, f"/sessions/{sid}/heartbeat", "a")
+        clock.now += 2
+        c.app.state.sessions.sweep()
+        state = get(c, f"/sessions/{sid}").json()
+        third = next(r["id"] for r in state["voting_rounds"] if r["closed_at"] is None)
+        assert third != second
+        assert (
+            sum(
+                p["excluded_at"] is not None
+                for p in state["round_participants"]
+                if p["round_id"] == second
+            )
+            == 2
+        )
+        assert c.app.state.sessions.sync_feedback(0) == 4
+        assert c.app.state.sessions.sync_feedback(0) == 0
+        assert store.count_events() == 4
+        assert {"love", "nah"} == {e["label"] for e in store.events()}
+        ranks = get(c, f"/sessions/{sid}/rankings").json()
+        assert ranks[0]["unanimous"] and not ranks[1]["unanimous"]
+        fourth = post(
+            c, f"/sessions/{sid}/control", json={"action": "skip", "expected_round_id": third}
+        ).json()["round_id"]
+        assert fourth != third
+        assert (
+            post(
+                c, f"/sessions/{sid}/control", json={"action": "skip", "expected_round_id": third}
+            ).json()["round_id"]
+            == fourth
+        )
+        assert post(c, f"/sessions/{sid}/control", json={"action": "end"}).status_code == 200
+        assert get(c, f"/sessions/{sid}").json()["session"]["status"] == "ended"
+        assert post(c, f"/sessions/{sid}/queue").status_code == 409
+        assert post(c, "/admin/retrain").status_code == 403
+        assert c.app.state.tandem["trainer"].thread is None
+        assert store.db.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert store.db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+
+
+def test_failures_cannot_undo_votes_and_restart_preserves_data(setup, monkeypatch):
+    factory, store, clock = setup
+    with TestClient(factory()) as c:
+        monkeypatch.setattr(c.app.state.integration, "playable", playable)
+        made = lobby(c)
+        sid = made["session_id"]
+        post(c, f"/sessions/{sid}/queue")
+        rid = post(c, f"/sessions/{sid}/control", json={"action": "start"}).json()["round_id"]
+        post(c, f"/sessions/{sid}/votes", "a", json={"round_id": rid, "value": 1})
+
+        async def unavailable(row):
+            raise RuntimeError("provider offline")
+
+        monkeypatch.setattr(c.app.state.integration, "playable", unavailable)
+        assert post(c, f"/sessions/{sid}/queue").status_code == 503
+        assert len(get(c, f"/sessions/{sid}").json()["votes"]) == 1
+        # Failed feedback transaction rolls back its own work, never the accepted vote.
+        with store.lock:
+            store.db.execute(
+                "CREATE TRIGGER fail_feedback BEFORE INSERT ON events BEGIN "
+                "SELECT RAISE(ABORT,'test outage'); END"
+            )
+            store.db.commit()
+        with pytest.raises(Exception, match="test outage"):
+            c.app.state.sessions.sync_feedback(0)
+        assert len(get(c, f"/sessions/{sid}").json()["votes"]) == 1
+        with store.lock:
+            store.db.execute("DROP TRIGGER fail_feedback")
+            store.db.commit()
+        assert c.app.state.sessions.sync_feedback(0) == 1
+        before = {m["movie_id"] for m in get(c, f"/sessions/{sid}").json()["session_movies"]}
+        monkeypatch.setattr(c.app.state.integration, "playable", playable)
+        assert post(c, f"/sessions/{sid}/queue").json()["added"] > 0
+        after = get(c, f"/sessions/{sid}").json()["session_movies"]
+        assert len(after) == len({m["movie_id"] for m in after}) and before < {
+            m["movie_id"] for m in after
+        }
+    dbpath = Path(store.db.execute("PRAGMA database_list").fetchone()[2])
     store.db.close()
-    restored = Store(__import__("pathlib").Path(path))
-    with TestClient(create_app(cat, restored, db)) as c:
-        assert len(restored._all("SELECT * FROM session_feeds")) == 3
-        assert restored.count_events() == 3
-        assert len(restored._all("SELECT * FROM vote_sync")) == 3
-    restored.db.close()
-    asyncio.run(db.client.aclose())
+    restored = Store(dbpath)
+    try:
+        with TestClient(factory(restored)) as c:
+            state = get(c, f"/sessions/{sid}").json()
+            assert len(state["votes"]) == 1 and state["session"]["host_user_id"] == "tv"
+            assert restored.count_events() == 1
+            assert c.app.state.sessions.sync_feedback(0) == 0
+            assert len(restored._all("SELECT * FROM session_feeds")) == 3
+    finally:
+        restored.db.close()
 
 
-def test_mapping_aggregation_and_consensus():
-    cat = type("Catalog", (), {"movies": [{"id": 12, "tmdb_id": 1000}]})()
-    assert movie_mapping(cat, [{"id": 999, "provider": "tmdb", "provider_movie_id": "1000"}]) == {
-        999: 0
+def test_main_routes_latest_feed_auth_groups_and_boosts_survive(setup):
+    factory, store, _ = setup
+    with TestClient(factory()) as c:
+        assert c.get("/me").status_code == 401
+        fa = post(c, "/feeds", "a", data={"tags": '{"tag 1":1}'}).json()["feed_id"]
+        fb = post(c, "/feeds", "b", data={"tags": '{"tag 2":1}'}).json()["feed_id"]
+        assert get(c, "/me", "a").json()["feed_id"] == fa
+        assert get(c, f"/feeds/{fa}/recs", "b").status_code == 404
+        assert (
+            post(c, f"/feeds/{fa}/favourites", "b", json={"titles": ["Movie 1"]}).status_code == 404
+        )
+        assert get(c, f"/feeds/{fa}/recs?boost=tag+1", "a").status_code == 200
+        gid = post(c, "/groups", json={"user_ids": ["a"]}).json()["group_id"]
+        assert post(c, f"/groups/{gid}/join", "b").status_code == 200
+        assert post(c, f"/groups/{gid}/recs", "outsider", json={}).status_code == 403
+        recs = post(c, f"/groups/{gid}/recs", json={"boost": ["tag 1"], "exclude": [50]}).json()
+        assert set(recs["users"]) == {"a", "b"} and 50 not in {m["id"] for m in recs["group"]}
+        assert post(c, "/feedback", "b", json={"movie_id": 50, "label": "love"}).status_code == 200
+        assert store.events()[0]["feed_id"] == fb
+        assert get(c, "/model", "a").status_code == 200
+        assert get(c, "/movies/search?q=Movie", "a").status_code == 200
+        assert get(c, "/session-catalog", "a").json()[0]["id"] in range(50, 65)
+
+
+def test_invitation_rotation_and_vote_ownership(setup, monkeypatch):
+    factory, store, _ = setup
+    with TestClient(factory()) as c:
+        monkeypatch.setattr(c.app.state.integration, "playable", playable)
+        made = lobby(c)
+        sid = made["session_id"]
+        new = post(c, f"/sessions/{sid}/invitation").json()["invite_token"]
+        assert (
+            post(
+                c,
+                "/sessions/join",
+                "outsider",
+                json={"display_name": "Other", "invite_token": made["invite_token"]},
+            ).status_code
+            == 400
+        )
+        assert (
+            post(
+                c, "/sessions/join", "outsider", json={"display_name": "Other", "invite_token": new}
+            ).status_code
+            == 200
+        )
+        post(c, f"/sessions/{sid}/queue")
+        rid = post(c, f"/sessions/{sid}/control", json={"action": "start"}).json()["round_id"]
+        assert (
+            post(
+                c, f"/sessions/{sid}/votes", "a", json={"round_id": rid, "value": 1, "user_id": "b"}
+            ).status_code
+            == 200
+        )
+        votes = get(c, f"/sessions/{sid}").json()["votes"]
+        assert votes[0]["user_id"] == "a"
+        assert post(c, f"/sessions/{sid}/leave", "outsider").status_code == 200
+        assert get(c, f"/sessions/{sid}", "outsider").status_code == 404
+
+
+def test_authorized_event_stream_reconnects_and_rejects_outsiders(setup):
+    factory, store, _ = setup
+
+    class Connection:
+        async def is_disconnected(self):
+            return False
+
+    async def check(sessions, sid):
+        stream = session_events(sessions, sid, "tv", Connection(), interval=0)
+        first = await stream.__anext__()
+        assert "event: state" in first and sid in first
+        sessions.heartbeat(sid, "a")
+        changed = await stream.__anext__()
+        assert changed != first
+        await stream.aclose()
+        reconnected = session_events(sessions, sid, "tv", Connection(), interval=0)
+        assert await reconnected.__anext__() == changed
+        await reconnected.aclose()
+
+    with TestClient(factory()) as c:
+        made = lobby(c)
+        sid = made["session_id"]
+        assert c.get(f"/sessions/{sid}/events").status_code == 401
+        assert get(c, f"/sessions/{sid}/events", "outsider").status_code == 404
+        asyncio.run(check(c.app.state.sessions, sid))
+
+
+def test_trailer_validation_and_modular_ranking(monkeypatch):
+    row = {
+        "trailer_provider": "youtube",
+        "trailer_url": "https://www.youtube.com/watch?v=abcdefghijk",
     }
-    assert np.allclose(mean_scores([[1, 3], [3, 1]]), [2, 2])
-    ambiguous = type("Catalog", (), {"movies": cat.movies * 2})()
-    assert (
-        movie_mapping(ambiguous, [{"id": 999, "provider": "tmdb", "provider_movie_id": "1000"}])
-        == {}
-    )
-    rounds = [
-        {"id": "r1", "movie_id": 1, "close_reason": "completed"},
-        {"id": "r2", "movie_id": 2, "close_reason": "completed"},
-    ]
-    participants = [{"round_id": r, "user_id": u} for r in ("r1", "r2") for u in ("a", "b")]
-    votes = [
-        {"round_id": r, "user_id": u, "value": (-1 if r == "r2" and u == "b" else 1)}
-        for r in ("r1", "r2")
-        for u in ("a", "b")
-    ]
-    assert final_ranking(rounds, participants, votes, {"1": -100, "2": 100})[0]["movie_id"] == 1
-    # Disconnecting after a dislike must never turn a mixed round unanimous.
-    for participant in participants:
-        if participant["round_id"] == "r2" and participant["user_id"] == "b":
-            participant["excluded_at"] = "2026-10-24T00:00:00Z"
-    ranked = final_ranking(rounds, participants, votes, {"1": -100, "2": 100})
-    assert ranked[1]["dislikes"] == 1 and not ranked[1]["unanimous"]
-
-
-def test_playback_validation_fails_closed(components, monkeypatch):
-    cat, store, db = components
     monkeypatch.delenv("YOUTUBE_API_KEY", raising=False)
-    with TestClient(create_app(cat, store, db)) as c:
-        integration = c.app.state.integration
-        original = db.client
-        with pytest.raises(HTTPException) as error:
-            asyncio.run(integration.playable(db.movies[0]))
-        assert error.value.status_code == 503
+
+    async def checks():
+        async with httpx.AsyncClient() as c:
+            with pytest.raises(HTTPException):
+                await verify_trailer(c, row)
         monkeypatch.setenv("YOUTUBE_API_KEY", "test-only")
 
-        async def available(request):
-            return httpx.Response(
-                200,
-                json={
-                    "items": [
-                        {
-                            "status": {"embeddable": True, "privacyStatus": "public"},
-                            "contentDetails": {},
-                        }
-                    ]
-                },
-            )
-
-        db.client = httpx.AsyncClient(transport=httpx.MockTransport(available))
-        assert asyncio.run(integration.playable(db.movies[0])) is True
-        integration.trailers.clear()
-
-        async def blocked(request):
+        def response(request):
             return httpx.Response(
                 200,
                 json={
@@ -284,30 +347,154 @@ def test_playback_validation_fails_closed(components, monkeypatch):
                 },
             )
 
-        asyncio.run(db.client.aclose())
-        db.client = httpx.AsyncClient(transport=httpx.MockTransport(blocked))
-        assert asyncio.run(integration.playable(db.movies[0])) is False
-        asyncio.run(db.client.aclose())
-        db.client = original
-    store.db.close()
-    asyncio.run(db.client.aclose())
+        async with httpx.AsyncClient(transport=httpx.MockTransport(response)) as c:
+            assert not await verify_trailer(c, row)
+
+    asyncio.run(checks())
+    assert np.allclose(mean_scores([[1, 3], [3, 1]]), [2, 2])
+    rounds = [
+        {"id": "r1", "movie_id": 50, "close_reason": "completed"},
+        {"id": "r2", "movie_id": 51, "close_reason": "completed"},
+    ]
+    participants = [
+        {"round_id": r, "user_id": u, "excluded_at": ("later" if u == "b" and r == "r2" else None)}
+        for r in ("r1", "r2")
+        for u in ("a", "b")
+    ]
+    votes = [
+        {"round_id": r, "user_id": u, "value": (-1 if u == "b" and r == "r2" else 1)}
+        for r in ("r1", "r2")
+        for u in ("a", "b")
+    ]
+    assert final_ranking(rounds, participants, votes, {"50": -99, "51": 99})[0]["movie_id"] == 50
 
 
-def test_railway_requires_persistent_volume(components, monkeypatch):
-    cat, store, db = components
+def test_railway_requires_volume_and_disallows_dev_auth(setup, monkeypatch):
+    factory, _, _ = setup
     monkeypatch.setenv("RAILWAY_ENVIRONMENT_ID", "test")
     monkeypatch.delenv("RAILWAY_VOLUME_MOUNT_PATH", raising=False)
     with pytest.raises(RuntimeError, match="persistent volume"):
-        with TestClient(create_app(cat, store, db)):
+        with TestClient(factory()):
             pass
-    store.db.close()
-    asyncio.run(db.client.aclose())
+    monkeypatch.setenv("RAILWAY_VOLUME_MOUNT_PATH", "/data")
+    monkeypatch.setattr(config, "DATA_DIR", Path("/data"))
+    monkeypatch.setattr(config, "DEV_AUTH", True)
+    with pytest.raises(RuntimeError, match="DEV_AUTH"):
+        with TestClient(factory()):
+            pass
 
 
-def test_exported_unified_contract():
-    from pathlib import Path
-
+def test_exported_contract():
     expected = json.loads(
         (Path(__file__).resolve().parents[2] / "docs/openapi-unified.json").read_text()
     )
     assert create_app().openapi() == expected
+
+
+def test_profiles_are_owned_and_shared_only_through_authorized_snapshot(setup):
+    factory, store, _ = setup
+    with TestClient(factory()) as c:
+        made = lobby(c)
+        sid = made["session_id"]
+        assert (
+            post(c, "/profiles/me", "a", json={"display_name": "Alice", "id": "b"}).json()["id"]
+            == "a"
+        )
+        assert get(c, "/profiles/me", "a").json()["display_name"] == "Alice"
+        assert get(c, "/profiles/me", "b").json()["display_name"] == "b"
+        snapshot = get(c, f"/sessions/{sid}").json()
+        assert any(p["id"] == "a" and p["display_name"] == "Alice" for p in snapshot["profiles"])
+        assert get(c, f"/sessions/{sid}", "outsider").status_code == 404
+
+
+def test_sse_delivery_and_reconnection_over_real_http(setup):
+    import socket
+    import threading
+    import time
+
+    import uvicorn
+
+    factory, store, _ = setup
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+    server = uvicorn.Server(
+        uvicorn.Config(
+            factory(),
+            host="127.0.0.1",
+            port=port,
+            log_level="critical",
+            timeout_graceful_shutdown=1,
+        )
+    )
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    def receive(lines):
+        for line in lines:
+            if line.startswith("data: "):
+                return json.loads(line[6:])
+        raise AssertionError("No SSE snapshot delivered")
+
+    try:
+        deadline = time.monotonic() + 5
+        while not server.started and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert server.started
+        with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=5) as c:
+            made = lobby(c)
+            sid = made["session_id"]
+            path = f"/sessions/{sid}/events"
+            assert get(c, path, "outsider").status_code == 404
+            assert c.get(path).status_code == 401
+            with c.stream("GET", path, headers={"Authorization": "Bearer tv"}) as stream:
+                assert stream.status_code == 200
+                lines = stream.iter_lines()
+                first = receive(lines)
+                assert post(c, f"/sessions/{sid}/heartbeat", "a").status_code == 200
+                changed = receive(lines)
+                assert changed["session"]["revision"] > first["session"]["revision"]
+            with c.stream("GET", path, headers={"Authorization": "Bearer tv"}) as stream:
+                assert receive(stream.iter_lines()) == changed
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+
+
+def test_migration_is_idempotent_and_preserves_existing_recommendation_data(tmp_path):
+    from scripts.migrate_sqlite import migrate
+    from sqlite_session_store import SessionStore
+
+    cat = Catalog.load()
+    path = tmp_path / "existing.db"
+    store = Store(path)
+    fid = store.add_feed("existing", {"heist": 1}, cat.feed_vector({"heist": 1}))
+    store.add_event(fid, 7, "love", 0)
+    SessionStore(store, cat, [])
+    custom = {"provider": "tmdb", "provider_movie_id": "9479", "title": "Hand edited title"}
+    with store.lock:
+        store.db.execute(
+            "INSERT INTO tandem_movie_metadata VALUES (?,?,?,?,?)",
+            ("tmdb", "9479", 76, 551, json.dumps(custom)),
+        )
+        store.db.commit()
+    vector = store.get_feed(fid)["x"].copy()
+    store.db.close()
+    source = Path(__file__).resolve().parents[1] / "catalog/session_movie_metadata.json"
+    first = migrate(path, source)
+    second = migrate(path, source)
+    assert first["supplementary_metadata_rows"] == second["supplementary_metadata_rows"] == 200
+    assert first["movie_catalog_rows"] == second["movie_catalog_rows"] == 5000
+    assert first["recommendation_counts_before"] == first["recommendation_counts_after"]
+    assert second["recommendation_counts_after"]["feeds"] == 1
+    assert second["recommendation_counts_after"]["events"] == 1
+    restored = Store(path)
+    try:
+        assert np.array_equal(restored.get_feed(fid)["x"], vector)
+        row = restored._all(
+            "SELECT details FROM tandem_movie_metadata WHERE provider_movie_id='9479'"
+        )[0]
+        assert json.loads(row["details"])["title"] == "Hand edited title"
+    finally:
+        restored.db.close()
