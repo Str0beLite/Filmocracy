@@ -120,7 +120,7 @@ function PhoneMood({ night }) {
     <section className="ps ps--mood">
       <RoomPill />
       <h1 className="ps-title">How do you want to feel tonight?</h1>
-      <p className="ps-sub">Tandem blends everyone's answer with what you all like on Instagram.</p>
+      <p className="ps-sub">Filmocracy blends everyone's answer with what you all like on Instagram.</p>
       <div className="mood-grid" role="radiogroup" aria-label="Tonight's feeling">
         {D.moods.map((m) => (
           <button
@@ -156,7 +156,7 @@ function PhoneConnect({ night }) {
     <section className="ps ps--connect">
       <RoomPill />
       <h1 className="ps-title">Grab a seat</h1>
-      <p className="ps-sub">Connect Instagram and Tandem works out what you'll actually want to watch. No quizzes.</p>
+      <p className="ps-sub">Connect Instagram and Filmocracy works out what you'll actually want to watch. No quizzes.</p>
       <label className="field">
         <span>Your name</span>
         <input
@@ -178,7 +178,7 @@ function PhoneConnect({ night }) {
         <button className="btn btn-insta" onClick={() => dispatch({ type: 'phoneStep', step: 'analyzing' })}>
           <Icon name="insta" /> Continue with Instagram
         </button>
-        <p className="fineprint">Read-only. Tandem never posts or messages for you.</p>
+        <p className="fineprint">Read-only. Filmocracy never posts or messages for you.</p>
       </div>
     </section>
   );
@@ -372,7 +372,7 @@ function PhoneMiss({ night }) {
       </div>
       <p className="eyebrow">{movie.title}</p>
       <h1 className="ps-title">Not this one.</h1>
-      <p className="ps-sub">Not everyone was in, so no golden buzzer. Tandem is tuning the next pick.</p>
+      <p className="ps-sub">Not everyone was in, so no golden buzzer. Filmocracy is tuning the next pick.</p>
       <div className="ps-foot">
         <div className="countdown" style={{ animationDuration: `${MISS_PAUSE_MS}ms` }} />
         <p className="fineprint">{hasNext ? 'Next trailer coming up…' : "Ranking tonight's picks…"}</p>
@@ -443,7 +443,7 @@ function PhoneShowing({ night }) {
       </div>
       <h1 className="ps-title">Phone down, eyes up.</h1>
       <p className="ps-sub">
-        Enjoy {night.s.nowShowing.title}. Tandem keeps learning your group's taste every movie night.
+        Enjoy {night.s.nowShowing.title}. Filmocracy keeps learning your group's taste every movie night.
       </p>
     </section>
   );

@@ -61,7 +61,7 @@ function TVLobby({ night }) {
           <p className="eyebrow">Room {D.room.code}</p>
           <h1 className="lobby-title">Grab a seat.</h1>
           <p className="lobby-sub">
-            Scan the code, tell Tandem how you want to feel tonight, and it plays trailers it thinks you'll all say
+            Scan the code, tell Filmocracy how you want to feel tonight, and it plays trailers it thinks you'll all say
             yes to.
           </p>
           <ol className="lobby-steps">

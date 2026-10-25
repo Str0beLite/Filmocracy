@@ -1,8 +1,8 @@
 > SQLite session integration: Docker/Railway run `unified:app`, preserving every recommendation route below and adding durable QR sessions, atomic voting and authenticated SSE. See [the integration guide](docs/unified-backend.md). Unified keeps training disabled and requires no Supabase service.
 
-# Tandem
+# Filmocracy
 
-**Movie night picks from your group's Instagram feeds.** Everyone uploads a few screenshots of their feed once, joins the host's screen with a QR code, and Tandem serves trailers the whole group will want to watch. You never rate a single movie: your feed already says what your taste is.
+**Movie night picks from your group's Instagram feeds.** Everyone uploads a few screenshots of their feed once, joins the host's screen with a QR code, and Filmocracy serves trailers the whole group will want to watch. You never rate a single movie: your feed already says what your taste is.
 
 Under the hood is a small learned matrix **W** that translates "Instagram taste" into "film taste". It starts as a zero-shot guess and gets better with every 👍 and 👎, live, while the app is running.
 
@@ -46,7 +46,7 @@ cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
-cp .env.example .env              # fill in keys; TANDEM_DEV_AUTH=1 lets you skip Google locally
+cp .env.example .env              # fill in keys
 uvicorn tandem.api:app --reload --env-file .env
 ```
 

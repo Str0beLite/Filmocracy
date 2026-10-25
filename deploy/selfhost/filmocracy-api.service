@@ -1,0 +1,13 @@
+[Unit]
+Description=Filmocracy API (unified backend on :8000)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/filmocracy-live
+EnvironmentFile=%h/.config/filmocracy/backend.env
+ExecStart=%h/filmocracy-live/backend/.venv/bin/uvicorn unified:app --app-dir backend --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -31,7 +31,7 @@ export function TVLobby() {
         <div>
           <h1 className="lobby-title display">Grab a seat.</h1>
           <p className="lobby-sub">
-            Scan the code, say how you want to feel tonight, and Tandem plays trailers it thinks you’ll all say yes to.
+            Scan the code, say how you want to feel tonight, and Filmocracy plays trailers it thinks you’ll all say yes to.
           </p>
           <ol className="lobby-steps">
             <li>
@@ -367,7 +367,7 @@ export function TVCheckpoint() {
       <div>
         <h1 className="checkpoint-title display">No golden buzzer yet.</h1>
         <p className="checkpoint-sub">
-          That’s {s.round} trailers in. Tandem has learned a lot about your group from those votes, so it can call it now
+          That’s {s.round} trailers in. Filmocracy has learned a lot about your group from those votes, so it can call it now
           or keep looking.
         </p>
         <div className="checkpoint-actions">
@@ -463,7 +463,7 @@ export function TVPicks() {
       <header className="picks-head">
         <div>
           <h1 className="picks-title display">Your group’s top 3</h1>
-          <p className="picks-sub">Golden buzzers first, then the trailers you liked, then what Tandem predicts.</p>
+          <p className="picks-sub">Golden buzzers first, then the trailers you liked, then what Filmocracy predicts.</p>
         </div>
         {top[0] && (
           <ActionButton action="showing" body={{ id: top[0].id }} className="tv-btn tv-btn--gold">

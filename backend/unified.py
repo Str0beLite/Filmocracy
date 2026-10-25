@@ -80,7 +80,7 @@ def create_app(catalog=None, store=None, metadata=None, clock=None):
             if not store and rec.state.tandem.get("store"):
                 rec.state.tandem["store"].db.close()
 
-    app = FastAPI(title="Tandem unified SQLite backend", version="0.3.0", lifespan=lifespan)
+    app = FastAPI(title="Filmocracy unified SQLite backend", version="0.3.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[

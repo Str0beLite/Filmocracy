@@ -1,0 +1,11 @@
+[Unit]
+Description=Cloudflare Tunnel for api.filmocracy.party
+After=network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/cloudflared tunnel run filmocracy
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

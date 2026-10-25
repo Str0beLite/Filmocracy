@@ -1,4 +1,4 @@
-# How the Tandem recommender works
+# How the Filmocracy recommender works
 
 A handoff guide to the backend in `backend/`. It splits the system into three pieces with clear contracts, so each piece can be worked on alone:
 

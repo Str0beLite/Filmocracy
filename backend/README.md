@@ -1,8 +1,8 @@
-> **watchtandem.tech deployment:** See [the production guide](../docs/production-deployment.md) for Railway, Cloudflare Pages, custom domains, Google configuration and the frontend completion blocker.
+> **Deployment:** the live setup is [self-hosting](../docs/self-hosting.md) (this machine + Cloudflare Tunnel at api.filmocracy.party, frontend on Cloudflare Pages, deploys on every push to main). The older Railway plan is in [the production guide](../docs/production-deployment.md).
 
 > **Unified SQLite service:** Docker/Railway run `unified:app`; `app:app` is an alias. Use [the integration guide](../docs/unified-backend.md) for durable QR sessions, atomic votes, authenticated WebSocket updates (with SSE compatibility), metadata migration and deployment. Supabase is no longer required. All recommendation routes below remain available; unified disables model training.
 >
-> Run from the repository root: `backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 8000`. Use main's Google ID tokens, GOOGLE_CLIENT_ID, and a YOUTUBE_API_KEY for queue validation. The standalone documentation below retains its original live-training development mode.
+> Run from the repository root: `backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 8000`. Callers send their user id as `Authorization: Bearer <id>` (see [self-hosting](../docs/self-hosting.md)); set a YOUTUBE_API_KEY for queue validation. The standalone documentation below retains its original live-training development mode.
 
 # Backend
 
@@ -34,7 +34,6 @@ Create an ignored `backend/.env` using the variables below and the [Railway prod
 | Key | Needed for | Where to get it |
 |---|---|---|
 | `MUSE_API_KEY` | Reading feed screenshots | [dev.meta.ai](https://dev.meta.ai) → sign in → **API keys** → create (US public preview, pay as you go). Without it, `POST /feeds` still accepts `tags` JSON (handy for testing). |
-| `GOOGLE_CLIENT_ID` | Sign-in (every endpoint except `/health`, `/model`, `/movies/search`) | [Google Cloud console](https://console.cloud.google.com/apis/credentials) → create a project → **OAuth consent screen** (External, add yourself as a test user) → **Credentials → Create credentials → OAuth client ID → Web application**. Under **Authorized JavaScript origins** add `http://localhost:5173` and, later, your Vercel domain. Use the same client id in the frontend's `VITE_GOOGLE_CLIENT_ID`. No client secret is needed. |
 | `TANDEM_ADMIN_TOKEN` | `POST /admin/retrain` | Any long random string: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. If it's unset, the endpoint is locked. |
 
 TMDB (posters, trailers, overviews) isn't a backend key. Recs carry `tmdb_id`, and the frontend fetches the details from TMDB itself (`VITE_TMDB_TOKEN`, from [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api), the "API Read Access Token").
@@ -68,7 +67,7 @@ uvicorn tandem.api:app --reload --env-file .env
 TANDEM_FAKE_ENCODER=1 pytest -q      # synthetic catalog, no keys needed
 ```
 
-To try it before Google is set up, put `TANDEM_DEV_AUTH=1` in `.env`. Then `Authorization: Bearer <name>` signs you in as `<name>`, with no check at all, so never set it on Railway.
+Every signed-in endpoint takes `Authorization: Bearer <user id>`, where the id is 1–64 letters, digits, `-` or `_`. There's no check beyond the format, so `Bearer alice` acts as alice.
 
 ```bash
 curl -H 'Authorization: Bearer alice' -F 'tags={"dark humor":1,"neon night drives":0.7}' localhost:8000/feeds
@@ -118,14 +117,14 @@ The algorithm is done: tags to x, W, recs, group lists, live training and the re
 
 Anything that produces lowercase free-form tags with weights works: a different model, a different prompt, or OCR of captions. Changing the encoder (`bge-small`) or `DIM` means rebuilding the catalog and throwing away `w_seed.pt` and every checkpoint.
 
-**2. The server and accounts (Supabase rewrite).** The algorithm only needs a stable user id per person. Today that's the Google `sub`, or the dev-auth name. What the backend still lacks:
+**2. The server and accounts (Supabase rewrite).** The algorithm only needs a stable user id per person. Today that's the random id each browser keeps. What the backend still lacks:
 - **Groups are in memory** (`state["groups"]` in `api.py`), so they're lost on every restart.
 - **Sessions don't exist yet.** There's no current trailer, no vote tally, no end rule. A session layer would pick a film from `POST /groups/{id}/recs`, show it, and send each vote to `POST /feedback` with `{movie_id, label}`: yes is `love`, no is `nah`.
 - **Feeds, events and W versions are in SQLite** on the Railway volume. Moving them to Supabase means rewriting `store.py` behind the same methods.
 
 ## API
 
-Everything except `/health`, `/model` and `/movies/search` needs `Authorization: Bearer <Google ID token>` (the `credential` that Google Identity Services hands the frontend). The user is the token's Google account id (`sub`).
+Everything except `/health`, `/model` and `/movies/search` needs `Authorization: Bearer <user id>`. The frontend makes up a random id per browser and keeps it.
 
 A user's taste embedding is the `x` of the feed they uploaded most recently. It never leaves the server: you call by user id or group id, and the backend scores with whatever W is live right now.
 
@@ -155,9 +154,9 @@ A **rec** looks like `{rec_id, id, title, year, tmdb_id, tags, score, because_of
 
 1. New project → **Deploy from GitHub repo** → this repo. In the service's **Settings**, set **Root Directory** to `backend`. Railway picks up `Dockerfile` and `railway.json`, and the health check is `/health`.
 2. **Add a Volume** to the service, mounted at `/data`. The SQLite log and W checkpoints live there and survive redeploys.
-3. **Variables:** `MUSE_API_KEY`, `GOOGLE_CLIENT_ID`, `TANDEM_ADMIN_TOKEN` (plus `MUSE_BASE_URL` / `MUSE_MODEL` to change the model). Don't set `TANDEM_DEV_AUTH`.
+3. **Variables:** `MUSE_API_KEY`, `TANDEM_ADMIN_TOKEN` (plus `MUSE_BASE_URL` / `MUSE_MODEL` to change the model). Don't set `TANDEM_DEV_AUTH`.
 4. **Settings → Networking → Generate Domain.** Check `https://<domain>/health` shows `"movies": 5000`.
-5. Frontend (Vercel): set `VITE_API_URL=https://<railway domain>`, plus `VITE_GOOGLE_CLIENT_ID` and `VITE_TMDB_TOKEN`. Add the Vercel domain to the OAuth client's **Authorized JavaScript origins**.
+5. Frontend (Vercel): set `VITE_API_URL=https://<railway domain>`, plus `VITE_TMDB_TOKEN`.
 
 The image bakes in torch (CPU) and the bge-small weights, so the first build takes a few minutes and boots without downloads. CORS allows any origin, which is fine because auth is a Bearer header, not cookies.
 
@@ -169,7 +168,6 @@ Hugging Face Spaces (Docker, free CPU) also works, but its disk is wiped on rest
 |---|---|---|
 | `MUSE_API_KEY` | none | Needed for screenshots |
 | `MUSE_BASE_URL`, `MUSE_MODEL` | Meta Model API, `muse-spark-1.3` | Any OpenAI-compatible vision endpoint |
-| `GOOGLE_CLIENT_ID` | none | OAuth web client id. Unset = every signed-in endpoint returns 401 |
 | `TANDEM_ADMIN_TOKEN` | none | Unset = `/admin/retrain` returns 403 |
 | `TANDEM_SEED_W` | `catalog/w_seed.pt` | Pre-trained W a fresh database starts from; point at a missing file to start at W = I |
 | `TANDEM_DEV_AUTH` | 0 | 1 = `Bearer <name>` signs in as `<name>`. Local only |

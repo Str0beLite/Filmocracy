@@ -4,7 +4,7 @@
 
 **Problem:** Groups waste the night scrolling and arguing over what to watch, and nobody wants to rate 50 movies to get recommendations.
 
-**Users:** Friends on a movie night. A host puts Tandem on the big screen (TV, laptop, iPad, projector); everyone else joins on their phone.
+**Users:** Friends on a movie night. A host puts Filmocracy on the big screen (TV, laptop, iPad, projector); everyone else joins on their phone.
 
 **MVP scope (must demo):**
 - Big screen shows a QR code; phones scan it and take a seat.

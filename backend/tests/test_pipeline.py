@@ -238,12 +238,11 @@ def test_boost_matches_normalised_tags_exactly():
     assert out.tolist() == [config.TAG_BOOST, 0, 0]
 
 
-def test_real_auth_rejects_missing_token_and_dev_auth_passes_name(setup, monkeypatch):
+def test_real_auth_takes_the_user_id_and_rejects_missing_or_malformed(setup):
     cat, store = setup
     with TestClient(create_app(catalog=cat, store=store, start_trainer=False)) as c:
         assert c.get("/me").status_code == 401
-        assert c.get("/me", headers=as_("forged")).status_code == 401
-        monkeypatch.setattr(config, "DEV_AUTH", True)
+        assert c.get("/me", headers=as_("not an id")).status_code == 401
         assert c.get("/me", headers=as_("alice")).json()["user"] == "alice"
 
 

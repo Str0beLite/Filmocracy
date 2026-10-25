@@ -1,6 +1,6 @@
 # Frontend
 
-The Tandem app: the big screen (TV, laptop, projector) and the phone, in the Velvet look. Vite + React + TypeScript.
+The Filmocracy app: the big screen (TV, laptop, projector) and the phone, in the Velvet look. Vite + React + TypeScript.
 
 **It runs on the real backend** (`backend/unified.py`, see [the unified backend guide](../docs/unified-backend.md)). The TV creates a session and shows its invitation as a QR code; phones sign in, join, upload Explore screenshots (read by Muse Spark) and vote. The backend picks trailers with the recommendation model, counts votes and ranks the picks. The TV runs the night around that (trailer, vote, verdict, picks) and publishes it as the session's *stage*, so every phone follows along over the WebSocket.
 
@@ -9,7 +9,7 @@ The Tandem app: the big screen (TV, laptop, projector) and the phone, in the Vel
 Needs Node 20.19 or newer (Node 24 LTS on the team laptop) and the backend's Python environment (see `backend/README.md`). From the repo root, in two terminals:
 
 ```bash
-# 1. Backend on :8000. backend/.env needs MUSE_API_KEY, YOUTUBE_API_KEY, GOOGLE_CLIENT_ID,
+# 1. Backend on :8000. backend/.env needs MUSE_API_KEY, YOUTUBE_API_KEY,
 #    TANDEM_DEV_AUTH=1 for local sign-in, and FRONTEND_ORIGINS listing http://localhost:5173
 #    and the laptop's Wi-Fi address (http://<ip>:5173) so phones can open the WebSocket.
 backend/.venv/bin/uvicorn unified:app --app-dir backend --env-file backend/.env --host 0.0.0.0 --port 8000
@@ -19,7 +19,7 @@ npm --prefix frontend install
 npm --prefix frontend run dev
 ```
 
-For local sign-in put `VITE_DEV_AUTH=1` in `frontend/.env.local` (matching the backend's `TANDEM_DEV_AUTH=1`): "Sign in with Google" then just asks for a name, and each browser tab is its own person. Without it, the TV and phones use real Google sign-in (`VITE_GOOGLE_CLIENT_ID`).
+Sign-in is a random user id each browser keeps (`src/api/auth.ts`). Put `VITE_DEV_AUTH=1` in `frontend/.env.local` to give each phone tab its own id, so one laptop can play a whole group.
 
 1. On the laptop, open http://localhost:5173/tv and fullscreen it (F11). Put it on the TV or projector.
 2. Everyone scans the QR code with a phone on the **same Wi-Fi**. The QR points at the laptop's Wi-Fi address even when the TV page is on localhost.
@@ -52,7 +52,7 @@ Votes stay private: the server never sends how anyone voted, only who has voted 
 | Path | What |
 |---|---|
 | `src/api/index.ts` | **The only place screens talk to the backend**: `connect()` follows the session's WebSocket and builds a `Snapshot`, `act()` maps each screen action to a backend call, `movie()` reads `/session-catalog`. On the TV it also runs the night and publishes the stage. |
-| `src/api/auth.ts` | The bearer token: the backend's dev login (`VITE_DEV_AUTH=1`) or a Google ID token from Google Identity Services. |
+| `src/api/auth.ts` | The bearer token: a random user id kept in the browser (per tab for phones when `VITE_DEV_AUTH=1`). |
 | `src/api/types.ts` | `Snapshot` is what every screen sees; `Rec` matches the Python backend's rec shape. |
 | `src/api/data.ts` | Seat colours, feelings and the catalog tags each one boosts, reactions, generated poster art. |
 | `src/api/tmdb.ts` | Trailer lookup: TMDB's videos for a `tmdb_id`, official YouTube trailer first. |

@@ -1,8 +1,8 @@
-# Tandem production deployment: watchtandem.tech
+# Filmocracy production deployment: filmocracy.party
 
 Prepared 2026-10-25. Target architecture: Cloudflare Pages at
-`https://watchtandem.tech`, unified FastAPI on Railway at
-`https://api.watchtandem.tech`, persistent SQLite at `/data/tandem.db`.
+`https://filmocracy.party`, unified FastAPI on Railway at
+`https://api.filmocracy.party`, persistent SQLite at `/data/tandem.db`.
 **Nothing has been deployed, DNS has not been changed, and this preparation does not
 publish the current branch.** Push, external configuration and deployment remain
 separate approval steps. Do not merge into main without approval.
@@ -105,7 +105,7 @@ TANDEM_DATA_DIR=/data
 GOOGLE_CLIENT_ID=<your existing Google Web OAuth client ID>
 YOUTUBE_API_KEY=<server-only key with YouTube Data API v3 enabled>
 MUSE_API_KEY=<server-only Meta Model API key>
-FRONTEND_ORIGINS=https://watchtandem.tech
+FRONTEND_ORIGINS=https://filmocracy.party
 TANDEM_DEV_AUTH=0
 TANDEM_FAKE_ENCODER=0
 SWEEP_ENABLED=true
@@ -123,18 +123,18 @@ used or required by the current GIS ID-token implementation. No Supabase credent
 are needed. `LLAMA_*` names are obsolete. Unified retraining remains disabled.
 
 CORS and browser WebSocket origin validation both read `FRONTEND_ORIGINS`. Use exact
-origins without paths/trailing slashes. Add `https://www.watchtandem.tech` or a specific
+origins without paths/trailing slashes. Add `https://www.filmocracy.party` or a specific
 Pages preview origin only if it will actually serve the app. Do not allow `*` or all
 preview hosts. Startup rejects development auth and fake encoding on Railway.
 
-## 4. api.watchtandem.tech -> Railway
+## 4. api.filmocracy.party -> Railway
 
 1. First verify the Railway-generated HTTPS domain and `/ready` work with the attached
    volume. Confirm the service listens on the assigned `PORT`.
 2. In backend service Settings -> Networking/Public Networking, add custom domain
-   **`api.watchtandem.tech`**, targeting that same assigned service port.
+   **`api.filmocracy.party`**, targeting that same assigned service port.
 3. Railway supplies a CNAME target and a TXT verification record. In Cloudflare DNS
-   for `watchtandem.tech`, add **both**, copying the exact hostnames and values:
+   for `filmocracy.party`, add **both**, copying the exact hostnames and values:
 
    | Type | Name | Value |
    | --- | --- | --- |
@@ -145,7 +145,7 @@ preview hosts. Startup rejects development auth and fake encoding on Railway.
    its certificate. There is no need to put a Cloudflare Worker or Pages proxy in front
    of FastAPI. Leave existing unrelated DNS/email records intact.
 5. Wait for Railway's domain verification and TLS issuance, then open
-   `https://api.watchtandem.tech/ready`. Missing TXT ownership verification can leave
+   `https://api.filmocracy.party/ready`. Missing TXT ownership verification can leave
    a resolving CNAME returning 404. Do not proceed through browser certificate warnings.
 6. If you later enable Cloudflare proxying, follow Railway's current Cloudflare/TLS
    guidance and retest sockets; do not change zone-wide SSL settings blindly. The
@@ -155,9 +155,9 @@ Public endpoints have **no `/api` prefix** and **no `:8000` port**:
 
 | Purpose | URL |
 | --- | --- |
-| API base | `https://api.watchtandem.tech` |
-| Ready / docs | `https://api.watchtandem.tech/ready`, `https://api.watchtandem.tech/docs` |
-| Session socket | `wss://api.watchtandem.tech/sessions/<session-uuid>/ws` |
+| API base | `https://api.filmocracy.party` |
+| Ready / docs | `https://api.filmocracy.party/ready`, `https://api.filmocracy.party/docs` |
+| Session socket | `wss://api.filmocracy.party/sessions/<session-uuid>/ws` |
 
 ## 5. Existing frontend on Cloudflare Pages (pending completion)
 
@@ -178,7 +178,7 @@ integration and confirms the frontend's source branch:
    | Build command | `npm run build` |
    | Output directory | `dist` (relative to frontend root) |
    | Node version | `NODE_VERSION=24` |
-   | Production API variable | `VITE_API_URL=https://api.watchtandem.tech` |
+   | Production API variable | `VITE_API_URL=https://api.filmocracy.party` |
    | Google variable | `VITE_GOOGLE_CLIENT_ID=<same public ID as Railway GOOGLE_CLIENT_ID>` |
 
 4. Vite variables are embedded at build time: changes require a rebuild. They are
@@ -189,7 +189,7 @@ integration and confirms the frontend's source branch:
 5. In the finished Vite adapter, read `import.meta.env.VITE_API_URL`, send
    `Authorization: Bearer <fresh GIS credential>` on HTTP calls, and initialize GIS
    with `import.meta.env.VITE_GOOGLE_CLIENT_ID`. Do not send a name as a bearer token.
-6. Use `wss://api.watchtandem.tech/sessions/{id}/ws`. The existing framework-free
+6. Use `wss://api.filmocracy.party/sessions/{id}/ws`. The existing framework-free
    `connectSession` helper derives `wss:` from an HTTPS API base; it is not yet wired
    into the teammate app. Authenticate with an initial `{"type":"auth","token":"..."}`
    message, renew membership with heartbeats, and reconnect using a fresh token and
@@ -201,19 +201,19 @@ For a React SPA, verify Pages' SPA fallback works for deep links; do not add a b
 proxy rewrite or a fake API handler to paper over an unfinished adapter. If the final
 frontend adds SSR/Pages Functions, revisit these static build settings with its owner.
 
-## 6. watchtandem.tech -> Cloudflare Pages
+## 6. filmocracy.party -> Cloudflare Pages
 
-1. Ensure `watchtandem.tech` is an active Cloudflare DNS zone in the **same account**
+1. Ensure `filmocracy.party` is an active Cloudflare DNS zone in the **same account**
    as the Pages project. If registered elsewhere, add it to Cloudflare and update
    the registrar to Cloudflare's assigned nameservers, preserving existing records.
    Buying the domain alone does not necessarily complete this step.
-2. In the Pages project -> Custom domains -> Set up a domain, add **`watchtandem.tech`**.
+2. In the Pages project -> Custom domains -> Set up a domain, add **`filmocracy.party`**.
    Let Pages create/verify the apex record and TLS certificate. Associate the domain
    in Pages first; do not merely invent a CNAME at the registrar.
 3. If manually prompted, set the apex CNAME target to the project's exact
    `<project>.pages.dev` hostname. Cloudflare handles apex flattening. Do not point
    the apex at Railway or put `api` on Pages.
-4. Optionally add `www.watchtandem.tech` and redirect it to the apex using Cloudflare
+4. Optionally add `www.filmocracy.party` and redirect it to the apex using Cloudflare
    rules. If www serves the app, include that origin in both CORS and Google's settings.
 5. Wait for domain/certificate status to be active, then verify the root and deep
    links over HTTPS on a phone. Preview `pages.dev` origins need explicit Google/CORS
@@ -224,10 +224,10 @@ frontend adds SSR/Pages Functions, revisit these static build settings with its 
 Use the existing Google **Web application** OAuth client, with GIS loaded from
 `https://accounts.google.com/gsi/client`. In Google Cloud/Auth Platform -> Clients:
 
-- Authorized JavaScript origins: **`https://watchtandem.tech`**. Add www only if used.
+- Authorized JavaScript origins: **`https://filmocracy.party`**. Add www only if used.
   Keep localhost entries only for intentional development testing.
 - Ensure consent/testing status permits the team's accounts; add test users if needed.
-  Configure branding/authorized domain `watchtandem.tech` if the console requires it.
+  Configure branding/authorized domain `filmocracy.party` if the console requires it.
 - Set the same client ID in Pages `VITE_GOOGLE_CLIENT_ID` and Railway `GOOGLE_CLIENT_ID`.
 - The GIS JavaScript callback returns `credential`, a Google **ID token**. Send that
   token to FastAPI; Google verifies it for the configured client, and the app uses `sub`
@@ -242,11 +242,11 @@ Use the existing Google **Web application** OAuth client, with GIS loaded from
 
 - [ ] `/ready` reports SQLite, 5,000 movies and training disabled; backend logs show
   one worker and the assigned port. Verify actual attached volume and backups.
-- [ ] Browser calls from `https://watchtandem.tech` pass CORS; other browser origins
+- [ ] Browser calls from `https://filmocracy.party` pass CORS; other browser origins
   cannot open session sockets. CORS does not replace Google/session authorization.
 - [ ] Real GIS sign-in on laptop/TV and **three distinct Google phone accounts** works;
   missing/invalid/expired/wrong-audience tokens fail. Credentials refresh correctly.
-- [ ] TV creates a session and displays a QR **join URL on watchtandem.tech**, with the
+- [ ] TV creates a session and displays a QR **join URL on filmocracy.party**, with the
   secure invite token in the fragment. Phone submits it to `/sessions/join`; do not
   use the mock's fixed four-character room code. No token in server access logs.
 - [ ] Upload Explore screenshots through `/feeds`; Muse extracts and summarizes tags.

@@ -1,6 +1,6 @@
 """Rate recs in the terminal to test the algorithm and feed W training data, no frontend needed.
 
-Needs the API running with TANDEM_DEV_AUTH=1 (the name you pass is your user id):
+Needs the API running (the name you pass is your user id):
     python scripts/play.py alice                         # reuse alice's latest feed, or make one
     python scripts/play.py alice --new                   # type a fresh set of feed tags
     python scripts/play.py alice --shots a.png b.png     # read screenshots with Muse Spark (needs MUSE_API_KEY)

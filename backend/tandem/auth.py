@@ -1,28 +1,21 @@
-"""Google sign-in: the frontend sends the GIS ID token as `Authorization: Bearer <token>`."""
+"""Simple user ids: the client makes up a random id, keeps it, and sends it as `Authorization: Bearer <id>`."""
 import hmac
+import re
 
 from fastapi import Header, HTTPException
-from google.auth.transport.requests import Request
-from google.oauth2 import id_token
 
 from . import config
 
+# shortcut: anyone who learns an id can act as that user; add real sign-in if accounts ever need protecting.
+USER_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+
 
 def current_user(authorization: str = Header("")):
-    """Returns the Google account id (`sub`) of the caller, or 401."""
+    """Returns the caller's user id, or 401."""
     token = authorization.removeprefix("Bearer ").strip()
-    if config.DEV_AUTH and token:
-        return token
-    # The big screen hosts without Google: its id is a random key it keeps in
-    # localStorage. Google `sub`s are numeric, so this can't pose as a phone.
-    if token.startswith("tv-") and len(token) >= 35:
-        return token
-    if not token or not config.GOOGLE_CLIENT_ID:
-        raise HTTPException(401, "sign in with Google")
-    try:
-        return id_token.verify_oauth2_token(token, Request(), config.GOOGLE_CLIENT_ID)["sub"]
-    except ValueError as e:
-        raise HTTPException(401, f"bad Google token: {e}") from e
+    if not USER_ID.fullmatch(token):
+        raise HTTPException(401, "missing or malformed user id")
+    return token
 
 
 def require_admin(x_admin_token: str = Header("")):

@@ -132,18 +132,6 @@
   color: var(--text);
 }
 
-/* Google's own button style: white, logo on the left. */
-.btn-google {
-  background: #fff;
-  color: #1f1f1f;
-  font-family: var(--font-body);
-}
-
-.btn-google svg {
-  width: 20px;
-  height: 20px;
-}
-
 .fineprint {
   font-size: 13px;
   line-height: 1.45;
@@ -1008,9 +996,6 @@
     filter: brightness(1.08);
   }
 
-  .btn-google:hover {
-    background: #f1f1f1;
-  }
 }
 
 /* The name field reads as a name, not a code. */

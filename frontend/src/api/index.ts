@@ -7,7 +7,7 @@
 // verdict, picks…) and publishes that as the session's "stage", which every
 // phone receives in the same snapshot.
 
-import { device, devUser, token } from './auth';
+import { device, userId } from './auth';
 import { COLORS, EMOTES, FEELINGS, art } from './data';
 import { MISS_MS, REVEAL_MS, TRAILER_GRACE_MS, TRAILER_MS, VOTE_TIMEOUT_MS, isCheckpoint } from './rules';
 import type { Movie, Outcome, Phase, PickSource, Reaction, Snapshot } from './types';
@@ -30,8 +30,7 @@ class ApiError extends Error {
 }
 
 async function http<T = unknown>(path: string, body?: unknown): Promise<T> {
-  const t = token();
-  if (!t) throw new ApiError('Sign in first', 401);
+  const t = userId();
   const form = body instanceof FormData;
   const res = await fetch(`${API}${path}`, {
     method: body === undefined ? 'GET' : 'POST',
@@ -176,7 +175,7 @@ let socket: WebSocket | null = null;
 let retry = 0;
 let started = false;
 let firstState: (() => void) | null = null;
-let myId: string | null = devUser(); // phone: our user id once joined (Google's `sub`)
+let myId: string | null = userId(); // phone: our user id
 
 const serverNow = () => Date.now() + offset;
 
@@ -287,8 +286,8 @@ function wsUrl(sid: string) {
 
 function openSocket() {
   const sid = sessionId;
-  const t = token();
-  if (!sid || !t) return;
+  const t = userId();
+  if (!sid) return;
   socket?.close();
   const ws = new WebSocket(wsUrl(sid));
   socket = ws;
@@ -334,7 +333,7 @@ async function startTv() {
   if (sessionId) {
     try {
       const st = await http<BackendState>(`/sessions/${sessionId}`);
-      const me = devUser() ?? (await http<{ user: string }>('/me')).user;
+      const me = userId();
       if (st.session.host_user_id === me && st.session.status !== 'ended') {
         invite = (await http<{ invite_token: string }>(`/sessions/${sessionId}/invitation`, {})).invite_token;
         return follow(sessionId);
@@ -349,7 +348,7 @@ async function startTv() {
 }
 
 async function startPhone() {
-  if (!sessionId || !token()) return emit(PREJOIN);
+  if (!sessionId) return emit(PREJOIN);
   await loadCatalog();
   await follow(sessionId);
 }
@@ -375,12 +374,6 @@ export function connect(onSnapshot: (s: Snapshot) => void, onStatus: (online: bo
   else if (device() === 'phone' && !sessionId) onSnapshot(PREJOIN);
   void start();
   return () => void listeners.delete(l);
-}
-
-// Call after signing in, so a TV waiting for Google can start its room.
-export function restart() {
-  started = false;
-  void start();
 }
 
 // ---- The TV runs the night ----
@@ -550,7 +543,7 @@ async function run(action: string, body: Record<string, unknown>, sid: string | 
         invite_token: inv,
       });
       await follow(session_id);
-      myId = devUser() ?? (await http<{ user: string }>('/me')).user;
+      myId = userId();
       return { id: myId };
     }
     case 'feeling':

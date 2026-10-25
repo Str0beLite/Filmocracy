@@ -9,5 +9,4 @@ openai>=1.50   # Meta Model API (Muse Spark), OpenAI-compatible
 sentence-transformers>=3.0   # frozen tag encoder (bge-small), not an LLM
 pytest>=8
 httpx==0.28.1
-google-auth>=2.30   # standalone API verifies Google sign-in ID tokens
-requests>=2.31   # transport used by google-auth
+requests>=2.31   # scripts/play.py and scripts/seed_fake.py

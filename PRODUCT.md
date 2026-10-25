@@ -16,7 +16,7 @@ Established friend groups watching a movie together in one room, usually a dim l
 
 ## Product Purpose
 
-Tandem picks a movie the whole group will say yes to, and ends the "what do you want to watch?" argument. Success is the group landing on a film quickly, and enjoying it.
+Filmocracy picks a movie the whole group will say yes to, and ends the "what do you want to watch?" argument. Success is the group landing on a film quickly, and enjoying it.
 
 ## Positioning
 
@@ -40,7 +40,7 @@ Tandem picks a movie the whole group will say yes to, and ends the "what do you 
 
 ## Brand Commitments
 
-- Name: Tandem.
+- Name: Filmocracy.
 - Voice: warm, playful-confident, short sentences, no jargon on screen.
 - Look: "Velvet" from `frontend/demo` (the chosen of three demo looks).
 

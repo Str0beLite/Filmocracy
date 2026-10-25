@@ -4,7 +4,7 @@ Each persona pairs Instagram-style feed tags with the catalog tags of films that
 tags deliberately don't name the film tags ("deadlift" -> sports films), so day-0 W = I gets them only partly right
 and training has a real link to learn. Every fake user id starts with "fake-", so the data can be dropped later.
 
-    python scripts/seed_fake.py                    # 60 users against localhost:8000 (needs TANDEM_DEV_AUTH=1)
+    python scripts/seed_fake.py                    # 60 users against localhost:8000
     python scripts/seed_fake.py --users 120 --seed 7
 """
 import argparse

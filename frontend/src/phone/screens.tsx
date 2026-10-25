@@ -20,7 +20,6 @@ import {
   X,
 } from 'lucide-react';
 import { EMOTES, FEELINGS, act, movie, type Snapshot } from '../api';
-import { DEV_AUTH, googleName, onSignIn, renderGoogleButton } from '../api/auth';
 import { Avatar, Confetti, LivePill, PickSource, Poster, Wildcard, Wordmark } from '../components/ui';
 import { FEELING_ICONS } from '../lib/feelings';
 import { trailerProgress } from '../lib/night';
@@ -95,22 +94,11 @@ export function PhoneJoin() {
   );
 }
 
-function GoogleG() {
-  return (
-    <svg viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
-      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
-      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
-      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
-    </svg>
-  );
-}
-
 export function PhoneSignIn() {
   return (
     <section className="ps">
       <Top />
-      <h1 className="ps-title display">Sign in once, and Tandem remembers your taste.</h1>
+      <h1 className="ps-title display">Filmocracy remembers your taste on this phone.</h1>
       <ul className="promise">
         <li>
           <span className="promise-icon">
@@ -126,37 +114,11 @@ export function PhoneSignIn() {
         </li>
       </ul>
       <div className="ps-foot">
-        {DEV_AUTH ? (
-          // Local dev: the backend's dev login, so any name will do.
-          <Link className="btn btn-google" to="/phone/name">
-            <GoogleG /> Sign in with Google
-          </Link>
-        ) : (
-          <GoogleButton />
-        )}
+        <Link className="btn btn-primary" to="/phone/name">
+          Continue <ArrowRight aria-hidden="true" />
+        </Link>
       </div>
     </section>
-  );
-}
-
-function GoogleButton() {
-  const navigate = useNavigate();
-  const el = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState('');
-  useEffect(() => {
-    const off = onSignIn(() => navigate('/phone/name'));
-    if (el.current) renderGoogleButton(el.current).catch(() => setError('Google sign-in didn’t load. Check your connection and try again.'));
-    return off;
-  }, [navigate]);
-  return (
-    <>
-      <div ref={el} className="google-button" />
-      {error && (
-        <p className="field-error" role="alert">
-          {error}
-        </p>
-      )}
-    </>
   );
 }
 
@@ -164,7 +126,7 @@ function GoogleButton() {
 export function PhoneName() {
   const { me, setMe } = usePhone();
   const navigate = useNavigate();
-  const [name, setName] = useState(googleName);
+  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return (
@@ -228,7 +190,7 @@ export function PhoneFeeling() {
     <section className="ps">
       <Top />
       <h1 className="ps-title display">How do you want to feel tonight?</h1>
-      <p className="ps-sub">Tandem blends everyone’s answer into what it picks.</p>
+      <p className="ps-sub">Filmocracy blends everyone’s answer into what it picks.</p>
       <div className="feeling-grid" role="radiogroup" aria-label="Tonight’s feeling">
         {FEELINGS.map((f) => {
           const Icon = FEELING_ICONS[f.id];
@@ -325,7 +287,7 @@ export function PhoneScreenshots() {
             Add a screenshot
           </button>
         )}
-        <p className="fineprint">Tandem only reads the tiles in your screenshots. It never sees your account.</p>
+        <p className="fineprint">Filmocracy only reads the tiles in your screenshots. It never sees your account.</p>
       </div>
     </section>
   );
@@ -394,7 +356,7 @@ export function PhoneReading() {
         ))}
       </div>
       <h1 className="ps-title display">{finished ? 'Got your vibe.' : 'Reading your Explore page…'}</h1>
-      <p className="ps-sub">Tandem turns what your feed is full of into movie taste.</p>
+      <p className="ps-sub">Filmocracy turns what your feed is full of into movie taste.</p>
       <ul className="tags" aria-live="polite">
         {shown.map((t) => (
           <li key={t}>{t}</li>
@@ -598,7 +560,7 @@ export function PhoneMiss() {
       </div>
       <h1 className="ps-title display">Not this one.</h1>
       <p className="ps-sub">
-        Not everyone was in on {movie(s.movieId!).title}, so no golden buzzer. Tandem is tuning the next pick.
+        Not everyone was in on {movie(s.movieId!).title}, so no golden buzzer. Filmocracy is tuning the next pick.
       </p>
       <div className="ps-foot">
         <WaitingNote>Next trailer coming up</WaitingNote>
@@ -703,7 +665,7 @@ export function PhoneShowing() {
         <Popcorn aria-hidden="true" />
       </div>
       <h1 className="ps-title display">Phone down, eyes up.</h1>
-      <p className="ps-sub">Enjoy {title}. Tandem learns your group’s taste a little more every movie night.</p>
+      <p className="ps-sub">Enjoy {title}. Filmocracy learns your group’s taste a little more every movie night.</p>
       <div className="ps-foot" />
     </section>
   );

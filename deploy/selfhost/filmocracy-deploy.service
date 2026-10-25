@@ -1,0 +1,6 @@
+[Unit]
+Description=Deploy origin/main to the Filmocracy API if it changed
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash %h/filmocracy-live/deploy/selfhost/update.sh
