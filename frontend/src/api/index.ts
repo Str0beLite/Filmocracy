@@ -7,7 +7,8 @@
 // verdict, picks…) and publishes that as the session's "stage", which every
 // phone receives in the same snapshot.
 
-import { device, userId } from './auth';
+import { device, token } from './auth';
+import { API, ApiError, http } from './http';
 import { COLORS, EMOTES, FEELINGS, art } from './data';
 import { MISS_MS, REVEAL_MS, TRAILER_GRACE_MS, TRAILER_MS, VOTE_TIMEOUT_MS, isCheckpoint } from './rules';
 import type { Movie, Outcome, Phase, PickSource, Reaction, Snapshot } from './types';
@@ -15,34 +16,6 @@ import type { Movie, Outcome, Phase, PickSource, Reaction, Snapshot } from './ty
 export type * from './types';
 export * from './rules';
 export { EMOTES, FEELINGS };
-
-const API = ((import.meta.env.VITE_API_URL as string | undefined) || '/api').replace(/\/$/, '');
-
-// ---- HTTP ----
-
-class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-  ) {
-    super(message);
-  }
-}
-
-async function http<T = unknown>(path: string, body?: unknown): Promise<T> {
-  const t = userId();
-  const form = body instanceof FormData;
-  const res = await fetch(`${API}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: { Authorization: `Bearer ${t}`, ...(body !== undefined && !form ? { 'Content-Type': 'application/json' } : {}) },
-    body: body === undefined ? undefined : form ? body : JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = (await res.json().catch(() => null))?.detail;
-    throw new ApiError(typeof detail === 'string' ? detail : `${path} failed (${res.status})`, res.status);
-  }
-  return res.json();
-}
 
 // ---- Movies: the backend's playable catalog (/session-catalog) ----
 
@@ -175,7 +148,7 @@ let socket: WebSocket | null = null;
 let retry = 0;
 let started = false;
 let firstState: (() => void) | null = null;
-let myId: string | null = userId(); // phone: our user id
+let myId: string | null = null; // resolved by the backend; never the bearer credential
 
 const serverNow = () => Date.now() + offset;
 
@@ -286,8 +259,8 @@ function wsUrl(sid: string) {
 
 function openSocket() {
   const sid = sessionId;
-  const t = userId();
-  if (!sid) return;
+  const t = token();
+  if (!sid || !t) return;
   socket?.close();
   const ws = new WebSocket(wsUrl(sid));
   socket = ws;
@@ -333,7 +306,7 @@ async function startTv() {
   if (sessionId) {
     try {
       const st = await http<BackendState>(`/sessions/${sessionId}`);
-      const me = userId();
+      const me = (await http<{ user: string }>('/me')).user;
       if (st.session.host_user_id === me && st.session.status !== 'ended') {
         invite = (await http<{ invite_token: string }>(`/sessions/${sessionId}/invitation`, {})).invite_token;
         return follow(sessionId);
@@ -348,7 +321,7 @@ async function startTv() {
 }
 
 async function startPhone() {
-  if (!sessionId) return emit(PREJOIN);
+  if (!sessionId || !token()) return emit(PREJOIN);
   await loadCatalog();
   await follow(sessionId);
 }
@@ -374,6 +347,12 @@ export function connect(onSnapshot: (s: Snapshot) => void, onStatus: (online: bo
   else if (device() === 'phone' && !sessionId) onSnapshot(PREJOIN);
   void start();
   return () => void listeners.delete(l);
+}
+
+// Call after signing in, so a TV waiting for Google can start its room.
+export function restart() {
+  started = false;
+  void start();
 }
 
 // ---- The TV runs the night ----
@@ -543,7 +522,7 @@ async function run(action: string, body: Record<string, unknown>, sid: string | 
         invite_token: inv,
       });
       await follow(session_id);
-      myId = userId();
+      myId = (await http<{ user: string }>('/me')).user;
       return { id: myId };
     }
     case 'feeling':

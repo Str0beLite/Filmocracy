@@ -46,6 +46,6 @@ function Room({ children }: { children: ReactNode }) {
 
 export function RoomProvider({ children }: { children: ReactNode }) {
   // The dev home page isn't a device; it doesn't join or host anything.
-  if (location.pathname === '/') return children;
+  if (location.pathname === '/' || location.pathname.startsWith('/training')) return children;
   return <Room>{children}</Room>;
 }

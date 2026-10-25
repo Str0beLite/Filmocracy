@@ -23,7 +23,8 @@ def create_app(catalog=None, store=None, metadata=None, clock=None):
     def principal(user=Depends(current_user)):
         return user
 
-    rec = recommendation_app(catalog=catalog, store=store, start_trainer=False, principal=principal)
+    training = os.getenv("TANDEM_TRAINING_ENABLED", "0") == "1"
+    rec = recommendation_app(catalog=catalog, store=store, start_trainer=training, principal=principal)
 
     async def maintain(app):
         while True:
@@ -34,7 +35,10 @@ def create_app(catalog=None, store=None, metadata=None, clock=None):
                     log.warning("Session expiry sweep deferred; will retry")
             try:
                 version, _ = app.state.tandem["trainer"].current()
-                await asyncio.to_thread(app.state.sessions.sync_feedback, version)
+                synced = await asyncio.to_thread(app.state.sessions.sync_feedback, version)
+                if training:
+                    for _ in range(synced):
+                        app.state.tandem["trainer"].notify_event()
             except Exception:
                 log.warning("Vote feedback sync deferred; accepted votes remain saved")
             await asyncio.sleep(10)
@@ -126,7 +130,7 @@ def create_app(catalog=None, store=None, metadata=None, clock=None):
             "status": "ready",
             "database": "sqlite",
             "sqlite_movies": request.app.state.sessions.movies(0, 1)["total"],
-            "training_enabled": False,
+            "training_enabled": training,
             "w_version": state["trainer"].current()[0],
             "movies": len(state["catalog"].movies),
         }

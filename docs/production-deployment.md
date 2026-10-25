@@ -120,7 +120,7 @@ Angle-bracket values are placeholders, not literal values to enter. Leave `PORT`
 Railway. The image already supplies `HF_HOME` and the catalog/seed checkpoint defaults.
 Google's public client ID must match the frontend ID; no Google client secret is
 used or required by the current GIS ID-token implementation. No Supabase credentials
-are needed. `LLAMA_*` names are obsolete. Unified retraining remains disabled.
+are needed. `LLAMA_*` names are obsolete. Unified retraining is disabled by default; keep `TANDEM_TRAINING_ENABLED=0` for this deployment, or see [the opt-in laptop training guide](training.md).
 
 CORS and browser WebSocket origin validation both read `FRONTEND_ORIGINS`. Use exact
 origins without paths/trailing slashes. Add `https://www.filmocracy.party` or a specific

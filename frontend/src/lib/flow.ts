@@ -45,4 +45,4 @@ export function phonePath(s: Snapshot, me: string): string {
   }
 }
 
-export const ONBOARDING = ['/phone/join', '/phone/sign-in', '/phone/name', '/phone/feeling', '/phone/screenshots', '/phone/reading'];
+export const ONBOARDING = ['/phone/join', '/phone/name', '/phone/feeling', '/phone/screenshots', '/phone/reading'];

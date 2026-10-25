@@ -84,7 +84,7 @@ files. Values below are placeholders/settings, never actual credentials.
 Railway supplies `PORT`, `RAILWAY_ENVIRONMENT_ID`, and the volume's
 `RAILWAY_VOLUME_MOUNT_PATH`; do not invent these to bypass startup checks. Leave
 `TANDEM_CATALOG_DIR`, `TANDEM_SEED_W` and `HF_HOME` at image defaults. Do not set an
-admin token to enable training: unified disables both the training worker and retrain
+admin token to enable training: unified disables the training worker by default and blocks retrain
 endpoint by design. No Supabase, TMDB import, database URL or Google client secret is
 required for this deployment. Provider keys belong only in the backend; public frontend
 configuration should contain the API URL and Google client ID, not backend secrets.
@@ -214,3 +214,5 @@ and the request/response contract. Real Instagram screenshot quality, production
 quota/load and Railway connectivity still require post-deployment checks.
 
 Main update `89a01f0` changes the default to minimal reasoning and adds one text-only whole-feed summary after tile reads. Failed summaries fall back to the plain average. The current minimal-reasoning flow passed a live synthetic-image and whole-feed summary probe; real Instagram quality still needs acceptance. The `/dev/feeds/{id}/top` preview and vision demo are development-only; production Railway keeps development auth disabled.
+
+For the separately opted-in local training workflow, see [training.md](training.md). Leave `TANDEM_TRAINING_ENABLED=0` for the original deployment configuration.

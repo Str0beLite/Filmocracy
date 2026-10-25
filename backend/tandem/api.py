@@ -4,6 +4,7 @@ Run:  uvicorn tandem.api:app --reload --env-file .env
 """
 
 import asyncio
+import io
 import json
 import math
 import uuid
@@ -15,6 +16,7 @@ import numpy as np
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from openai import APIError
+from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel
 
 from . import config, grid, vision
@@ -28,7 +30,7 @@ from .trainer import Trainer
 
 
 def create_app(catalog=None, store=None, start_trainer=True, principal=None):
-    # Standalone and unified share Google's identity; unified disables training.
+    # Standalone and unified share Google's identity; unified opts into training explicitly.
     identity = principal or current_user
 
     def public():
@@ -44,8 +46,12 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         if start_trainer:
             state["trainer"].start()
         get_encoder()  # load encoder weights at boot, not on the first request
-        yield
-        state["trainer"].stop()
+        try:
+            yield
+        finally:
+            state["trainer"].stop()
+            if state["trainer"].thread:
+                await asyncio.to_thread(state["trainer"].thread.join)
 
     app = FastAPI(title="tandem", lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -135,6 +141,28 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
             "tags": dict(sorted(weights.items(), key=lambda kv: -kv[1])),
             "dropped_as_noise": dropped,
         }
+
+    @app.post("/training/feeds")
+    async def training_feed(
+        files: Annotated[list[UploadFile], File()], user: str = Depends(identity)
+    ):
+        if len(files) != 3:
+            raise HTTPException(422, "Upload exactly 3 Explore screenshots")
+        if any(f.content_type not in {"image/jpeg", "image/png", "image/webp"} for f in files):
+            raise HTTPException(422, "Screenshots must be JPEG, PNG or WebP images")
+        if any(f.size is None or f.size > 10 * 1024 * 1024 for f in files):
+            raise HTTPException(413, "Each screenshot must be at most 10 MB")
+        for file in files:
+            data = await file.read()
+            try:
+                with Image.open(io.BytesIO(data)) as image:
+                    if image.format not in {"JPEG", "PNG", "WEBP"}:
+                        raise ValueError("Unsupported image format")
+                    image.verify()
+            except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+                raise HTTPException(422, "One screenshot could not be read; choose another image")
+            await file.seek(0)
+        return await create_feed(tags="", files=files, user=user)
 
     @app.get("/me")
     def me(user: str = Depends(identity)):

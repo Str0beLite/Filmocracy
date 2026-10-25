@@ -28,6 +28,15 @@ from tandem.auth import current_user
 router = APIRouter()
 
 
+class TrainingNext(BaseModel):
+    boost: list[str] = Field(default_factory=list, max_length=20)
+
+
+@router.post("/training/feeds/{fid}/next")
+async def training_next(fid: str, body: TrainingNext, request: Request, user=Depends(current_user)):
+    return await request.app.state.integration.training_next(fid, user, body.boost)
+
+
 @router.websocket("/sessions/{sid}/ws")
 async def session_socket(sid: UUID, websocket: WebSocket):
     # Browser sockets cannot send Authorization headers; keep credentials out of URLs.

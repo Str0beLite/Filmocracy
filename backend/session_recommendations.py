@@ -9,7 +9,7 @@ from urllib.parse import parse_qs, urlparse
 
 import numpy as np
 from fastapi import HTTPException
-from tandem.recommend import pick, score_feed
+from tandem.recommend import boost, pick, score_feed
 
 log = logging.getLogger(__name__)
 
@@ -188,6 +188,51 @@ class SessionRecommendations:
                 raise HTTPException(
                     503, "Recommendations unavailable; retry queue or host skip/end"
                 )
+
+    async def training_next(self, fid, user, boost_tags):
+        # Use the existing scorer and feedback format; a training visit is not a TV session.
+        async with self.lock:
+            feed = await asyncio.to_thread(self.store.get_feed, fid)
+            if not feed:
+                raise HTTPException(404, "Unknown feed")
+            if feed["user"] != user:
+                raise HTTPException(403, "This taste profile belongs to another user")
+            shown = await asyncio.to_thread(
+                self.store._all, "SELECT movie_idx FROM recs WHERE feed_id=?", (fid,)
+            )
+            excluded = {r["movie_idx"] for r in shown}
+            excluded |= await asyncio.to_thread(self.store.rated_movies, fid)
+            cat = self.state["catalog"]
+            version, model = self.state["trainer"].current()
+            votes = await asyncio.to_thread(self.store.votes, fid)
+            scores = await asyncio.to_thread(
+                score_feed, model, feed["x"], cat.vecs, cat.prior, *votes
+            )
+            scores = boost(scores, cat.movies, boost_tags)
+            if not np.isfinite(scores).all():
+                raise HTTPException(503, "Recommendations unavailable; try again")
+            rows = {r["id"]: r for r in await asyncio.to_thread(self.sessions.metadata)}
+            for idx in np.argsort(-scores):
+                idx = int(idx)
+                row = rows.get(cat.movies[idx]["id"])
+                if idx in excluded or row is None:
+                    continue
+                try:
+                    if not await self.playable(row):
+                        continue
+                except HTTPException:
+                    raise
+                except Exception:
+                    raise HTTPException(503, "Trailer checks unavailable; try again")
+                ids = await asyncio.to_thread(
+                    self.store.add_recs, fid, [{"idx": idx, "rank": 1, "explore": False}], version
+                )
+                return {
+                    "rec_id": ids[0],
+                    "w_version": version,
+                    "movie": {**row, **cat.public(idx), "trailer_key": youtube_id(row)},
+                }
+            raise HTTPException(409, "You have watched all available verified trailers")
 
     async def rankings(self, sid, user):
         state = await asyncio.to_thread(self.sessions.snapshot, sid, user)

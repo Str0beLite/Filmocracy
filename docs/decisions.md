@@ -70,3 +70,9 @@ One line each: date, decision, why.
 - Self-host option: Cloudflare Tunnel from a local machine to api.filmocracy.party (docs/self-hosting.md).
 - 2026-10-25: Renamed the product to Filmocracy; frontend at filmocracy.party (Cloudflare Pages), API at api.filmocracy.party. Internal identifiers (tandem package, TANDEM_* env vars, storage keys) unchanged.
 - 2026-10-25: Dropped Google sign-in for a random user id per browser (bearer token, format-checked only). Backend self-hosted via Cloudflare Tunnel; a systemd timer pulls main every minute instead of a GitHub runner (public repo).
+
+- 2026-10-25: Add individual /training onboarding with exactly three screenshots and verified trailer feedback, using existing SQLite feeds/events/recs and opt-in TANDEM_TRAINING_ENABLED; keep the model algorithm and committed seed unchanged and expose FastAPI through a laptop Cloudflare Tunnel.
+
+- 2026-10-25: Remove Google sign-in from the frontend; per-tab 256-bit guest bearer keys map to separate hashed public user IDs, preserving ownership and WebSocket authorization without schema changes or relinking existing Google profiles.
+
+- 2026-10-25: Integrate the local individual trainer with Filmocracy main cdfc83a, retaining self-hosting, persistent browser IDs and optional YouTube verification; route both direct feedback and synced session votes to the opt-in existing trainer, preserving prior guest identities and catalog/checkpoint data.

@@ -1,25 +1,24 @@
-// Who this device is to the backend: a random user id made up on first visit,
-// kept in the browser and sent as the bearer token on every request.
-// - VITE_DEV_AUTH=1: each phone tab is its own person (handy for testing a
-//   whole group from one laptop). Otherwise a phone keeps its id across visits.
-// - The TV always keeps one id per browser so a refresh can still host its room.
-
+// Keep main's existing browser IDs and the trainer's already-issued guest keys.
+// New guest keys map to separate public IDs on the backend. Never use a public
+// profile ID as a bearer credential. DEV_AUTH controls per-tab storage only.
 export const DEV_AUTH = import.meta.env.VITE_DEV_AUTH === '1';
+export const device = (): 'tv' | 'phone' =>
+  (location.pathname.startsWith('/phone') || location.pathname.startsWith('/training') ? 'phone' : 'tv');
 
-export const device = (): 'tv' | 'phone' => (location.pathname.startsWith('/phone') ? 'phone' : 'tv');
-
-export function userId(): string {
+export function token(): string {
   const d = device();
   const store = d === 'phone' && DEV_AUTH ? sessionStorage : localStorage;
-  const key = `tandem.device-user.${d}`;
-  let id = store.getItem(key);
-  if (!id) {
-    // Not crypto.randomUUID: phones open the laptop over plain http (not a
-    // secure context), where it's undefined and the whole app goes blank.
-    // Long, because knowing an id is all it takes to act as that user.
-    const bytes = crypto.getRandomValues(new Uint8Array(16));
-    id = `${d}-${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
-    store.setItem(key, id);
+  const legacy = store.getItem(`tandem.device-user.${d}`);
+  if (legacy && new RegExp(`^${d}-[a-f0-9]{32}$`).test(legacy)) return legacy;
+  // Preserve training visitors from before the main merge, without changing their identity.
+  const saved = d === 'phone' ? sessionStorage.getItem('tandem.guest.token') : null;
+  const earlier = saved && /^guest-[a-f0-9]{64}$/.test(saved) ? saved : null;
+  const key = d === 'tv' ? 'tandem.device-user.tv' : 'tandem.guest.token';
+  let value = earlier ?? store.getItem(key);
+  if (!value || !/^guest-[a-f0-9]{64}$/.test(value)) {
+    const bytes = crypto.getRandomValues(new Uint8Array(d === 'tv' ? 16 : 32));
+    value = `${d === 'tv' ? 'tv' : 'guest'}-${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}`;
   }
-  return id;
+  store.setItem(key, value);
+  return value;
 }

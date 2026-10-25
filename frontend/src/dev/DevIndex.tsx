@@ -15,6 +15,10 @@ export function DevIndex() {
       </header>
       <div className="dev-cols">
         <section>
+          <h2>Train Your Taste</h2>
+          <p className="dev-note"><a href="/training">Open training</a>. Upload 3 Explore screenshots, watch trailers, and vote without joining a room.</p>
+        </section>
+        <section>
           <h2>
             <Tv aria-hidden="true" /> Big screen
           </h2>

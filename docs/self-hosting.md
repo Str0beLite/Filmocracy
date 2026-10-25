@@ -116,3 +116,7 @@ cloudflared tunnel --url http://localhost:8000
 ```
 
 This prints a random `https://<words>.trycloudflare.com` URL. You don't need a login, and the URL changes every time you run it. Point `VITE_API_URL` at it and add the frontend's origin to `FRONTEND_ORIGINS`.
+
+## Individual training
+
+The `/training` page uses the same unified backend, catalog and SQLite database. Set `TANDEM_TRAINING_ENABLED=1` in the private backend environment to enable the existing automatic trainer for trailer feedback and synced session votes. Keep one worker; checkpoints are saved alongside the runtime database. See [training setup and verification](training.md).

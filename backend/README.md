@@ -182,3 +182,7 @@ All other knobs (rank, τ, λ, learning rate, steps) are in `tandem/config.py`.
 See the [Railway production handoff](../docs/railway-deployment.md) for current dashboard settings, production variables, approval boundaries and the post-deployment checklist.
 
 For the development-only vision demo with the unified API, serve `backend/scripts` with `python3 -m http.server 5173 --directory backend/scripts` and open `http://localhost:5173/vision_demo.html`. Keep the API on port 8000 with `TANDEM_DEV_AUTH=1` locally. This matches the default allowed frontend origin; opening the file directly has Origin `null` and is intentionally not allowed by unified CORS. Do not enable development auth on Railway.
+
+## Individual training
+
+Open `/training` for a name, a feeling, exactly three Explore screenshots, then trailer voting without a TV session. The existing automatic trainer is opt-in through `TANDEM_TRAINING_ENABLED=1`. See [the training guide](../docs/training.md).

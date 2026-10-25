@@ -11,3 +11,5 @@
 | [agent-kit.md](agent-kit.md) | What `install-agent-kit.sh` installs and for which agents |
 
 Unified backend: [integration and compatibility](unified-backend.md), [frontend contract](frontend-integration.md), [OpenAPI](openapi-unified.json), and [teammate handoff](backend-handoff.md).
+
+Individual training: [three screenshots, trailer voting, automatic trainer and laptop tunnel](training.md).

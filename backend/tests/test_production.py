@@ -7,6 +7,7 @@ import test_unified as sessions
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from tandem import config
+from tandem.auth import current_user
 
 ORIGIN = "https://filmocracy.party"
 
@@ -91,3 +92,32 @@ def test_railway_refuses_fake_encoder(sqlite_setup, monkeypatch):
     with pytest.raises(RuntimeError, match="TANDEM_FAKE_ENCODER"):
         with TestClient(factory()):
             pass
+
+
+def test_guest_identity_is_private_and_enforces_ownership(sqlite_setup, monkeypatch):
+    factory, _, _ = sqlite_setup
+    monkeypatch.setenv("FRONTEND_ORIGINS", ORIGIN)
+    monkeypatch.setattr(config, "DEV_AUTH", False)
+    guest = "guest-" + "a" * 64
+    other = "guest-" + "b" * 64
+    public_id = current_user(authorization=f"Bearer {guest}")
+    assert public_id.startswith("guest:") and public_id != guest
+    app = factory()
+    app.dependency_overrides.clear()
+    with TestClient(app) as c:
+        headers = {"Authorization": f"Bearer {guest}"}
+        assert c.get("/me", headers=headers).json()["user"] == public_id
+        for invalid in ("", public_id, "guest-" + "x" * 64):
+            assert c.get("/me", headers={"Authorization": f"Bearer {invalid}"}).status_code == 401
+        made = c.post("/sessions", headers=headers, json={"display_name": "Guest"}).json()
+        sid = made["session_id"]
+        snapshot = c.get(f"/sessions/{sid}", headers=headers)
+        assert snapshot.status_code == 200
+        assert guest not in snapshot.text
+        assert snapshot.json()["session"]["host_user_id"] == public_id
+        assert c.get(f"/sessions/{sid}", headers={"Authorization": f"Bearer {other}"}).status_code == 404
+        with c.websocket_connect(f"/sessions/{sid}/ws", headers={"Origin": ORIGIN}) as ws:
+            ws.send_json({"type": "auth", "token": guest})
+            message = ws.receive_json()
+            assert message["state"]["session"]["host_user_id"] == public_id
+            assert guest not in str(message)

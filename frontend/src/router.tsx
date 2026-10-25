@@ -7,8 +7,10 @@ import { TVFrame } from './tv/TVFrame';
 import * as TV from './tv/screens';
 import { PhoneFrame } from './phone/PhoneFrame';
 import * as Phone from './phone/screens';
+import { Training } from './training/Training';
 
 export const router = createBrowserRouter([
+  { path: '/training', element: <Training /> },
   import.meta.env.DEV ? { path: '/', element: <DevIndex /> } : { path: '/', loader: () => redirect('/tv') },
   {
     path: '/tv',
@@ -32,7 +34,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: null },
       { path: 'join', element: <Phone.PhoneJoin /> },
-      { path: 'sign-in', element: <Phone.PhoneSignIn /> },
+      { path: 'sign-in', loader: () => redirect('/phone/name') },
       { path: 'name', element: <Phone.PhoneName /> },
       { path: 'feeling', element: <Phone.PhoneFeeling /> },
       { path: 'screenshots', element: <Phone.PhoneScreenshots /> },

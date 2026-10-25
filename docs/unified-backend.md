@@ -1,3 +1,5 @@
+> Current frontend: anonymous browser credentials (`guest-` plus 64 random hex characters) replace Google sign-in. FastAPI returns a separate hashed `guest:` user ID; public IDs cannot authenticate. Main's existing browser user IDs remain supported. Google sign-in and its SDK have been removed by upstream main.
+
 # Unified SQLite backend
 
 The feature branch retains all recommendation features from main and moves the entire
@@ -14,28 +16,30 @@ backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 80
 ```
 
 `app:app` forwards to this same application. Docker and Railway use `unified:app`.
-Required: `GOOGLE_CLIENT_ID`. Optional for screenshots: `MUSE_API_KEY`,
-`MUSE_BASE_URL`, `MUSE_MODEL`, `MUSE_REASONING` (default minimal), `MUSE_MAX_TOKENS` (4096). Queue preparation requires `YOUTUBE_API_KEY`;
+Screenshots require `MUSE_API_KEY`. Optional Muse overrides are `MUSE_BASE_URL`,
+`MUSE_MODEL`, `MUSE_REASONING` (default minimal), and `MUSE_MAX_TOKENS` (4096).
+`YOUTUBE_API_KEY` enables live trailer verification; without it main trusts catalog trailers.
 `TRAILER_REGION` defaults to US. Set `FRONTEND_ORIGINS` to exact comma-separated
 frontend origins. `TANDEM_DATA_DIR` contains `tandem.db` and checkpoints; the movie
 vectors/catalog remain under `TANDEM_CATALOG_DIR` (default `backend/catalog`).
 No Supabase URL, key, JWT, SDK, or Realtime subscription is needed.
 
-All user routes use main's `Authorization: Bearer <Google ID token>` and Google `sub`
-as the user ID. `TANDEM_DEV_AUTH=1` supports main's local development identity shortcut;
+User routes use `Authorization: Bearer <browser credential>`. Existing main browser IDs
+remain valid. New guest credentials resolve to separate hashed public user IDs. `TANDEM_DEV_AUTH=1` enables development preview routes;
 it must never be used in production, and unified refuses it on Railway. For deployment,
-use Google's configured web client and refresh sign-in tokens through the frontend.
-Tokens are not stored in SQLite or localStorage by our TV helper.
+use the browser credential saved by `src/api/auth.ts`; no Google configuration is required.
+The current app keeps browser credentials in localStorage (sessionStorage for per-tab testing). The standalone TV helper accepts a token callback and stores only its session UUID.
 
 ## What stays from main
 
 The existing model, checkpoints, encoder, scoring, exploration, tag boosting, SQLite
-feeds/recs/events/models schema, latest-feed behavior, Google auth and tests are kept.
+feeds/recs/events/models schema, latest-feed behavior, browser auth and tests are kept.
 All `/me`, `/feeds`, `/feedback`, `/groups`, `/model`, `/movies/search` and admin routes
-remain exposed. Unified intentionally disables the training worker and returns 403
-from `/admin/retrain`, even with the admin header, to preserve the no-retraining
-constraint. Standalone `tandem.api:app` retains main's admin-protected training behavior.
-Only synthetic test catalogs and temporary checkpoints are trained by existing tests.
+remain exposed. Unified disables the training worker by default; `TANDEM_TRAINING_ENABLED=1`
+opts into the existing automatic trainer for the [individual training page](training.md).
+`/admin/retrain` still returns 403 in unified mode. Standalone `tandem.api:app` retains
+main's admin-protected training behavior. Tests train only synthetic catalogs with
+temporary checkpoints.
 
 Main's `/groups` remains its in-memory recommendation-preview API, with per-member
 and average-vector lists, optional mood boosts and caller-provided exclusions. Durable
@@ -50,7 +54,7 @@ IDs** externally. A group ID and a session ID are separate and cannot be interch
 
 `tandem/session_schema.sql` is an additive, idempotent SQLite migration. It adds:
 
-- `tandem_profiles`: Google user ID and display name.
+- `tandem_profiles`: browser user ID and display name.
 - `tandem_movies`: all 5,000 main catalog entries with MovieLens/TMDB IDs and immutable
   model vector indices.
 - `tandem_movie_metadata`: provider/TMDB identity, original source ID, optional mapped
@@ -97,8 +101,8 @@ the team separately approves any decommissioning; this work performs no remote w
 
 ## Frontend sequence
 
-1. Google sign-in, then `GET /me`. Create a feed using multipart `POST /feeds` with
-   `tags` JSON or screenshots. Feed ownership comes from verified Google identity.
+1. Resolve the browser identity using `GET /me`. Create a feed using multipart `POST /feeds` with
+   `tags` JSON or screenshots. Feed ownership comes from the authenticated browser identity.
 2. TV calls `POST /sessions` with `{"display_name":"TV"}`. The QR contains a frontend
    join URL with the returned invitation token in its fragment.
 3. Phones call `POST /sessions/join` with `display_name` and `invite_token`. If a phone
@@ -125,7 +129,7 @@ provides mapped movie metadata/trailer links. API schemas are generated in
 ## Realtime and reconnect
 
 Use **WebSockets** at `/sessions/{id}/ws` (`wss://` over HTTPS). After connecting,
-send `{"type":"auth","token":"<fresh Google ID token>"}` within 10 seconds. Credentials
+send `{"type":"auth","token":"<browser credential>"}` within 10 seconds. Credentials
 never belong in the URL. Browser origins must match `FRONTEND_ORIGINS`; CORS middleware
 does not protect WebSockets, so the socket endpoint checks Origin explicitly.
 
@@ -137,7 +141,7 @@ the TV can send `{"type":"heartbeat"}` every 10 seconds to renew their membershi
 the authenticated HTTP endpoints above, retaining the same atomic transactions. Sockets
 broadcast the resulting state; they do not maintain a separate copy of voting state.
 
-Reconnect with a fresh Google token and the same session UUID. Every connection receives
+Reconnect with the same browser credential and the same session UUID. Every connection receives
 a fresh snapshot, so missed messages need no replay. Apply only newer revisions within
 each connection. Close codes: `4401` = authentication required/failed, `4403` = no session
 access (including a member who leaves), `1008` = invalid origin/message. Browser origin

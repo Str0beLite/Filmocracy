@@ -79,7 +79,7 @@ export function PhoneJoin() {
         <>
           <h1 className="ps-title display">You’re invited to movie night.</h1>
           <div className="ps-foot">
-            <Link className="btn btn-primary" to="/phone/sign-in">
+            <Link className="btn btn-primary" to="/phone/name">
               Join the room <ArrowRight aria-hidden="true" />
             </Link>
           </div>
