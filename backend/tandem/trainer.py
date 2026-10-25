@@ -32,8 +32,10 @@ class Trainer:
         row = self.store.latest_accepted()
         if row:
             self.model = from_state(self.w0, torch.load(row["path"]))
-            self.model.eval()
             self.version = row["version"]
+        elif config.SEED_W.exists():          # fresh database: start from the committed pre-trained W, still "v0"
+            self.model = from_state(self.w0, torch.load(config.SEED_W))
+        self.model.eval()
 
     # background thread
     def start(self):

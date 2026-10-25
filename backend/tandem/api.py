@@ -100,7 +100,8 @@ def create_app(catalog=None, store=None, start_trainer=True):
         return {"user": user, "feed_id": f["id"], "tags": f["tags"]} if f else {"user": user, "feed_id": None}
 
     class Favourites(BaseModel):
-        titles: list[str]
+        titles: list[str] = []
+        movie_ids: list[int] = []   # exact catalog ids, when the client already knows the film
         holdout_frac: float = 0.3   # hide this share for the held-out recall check
 
     @app.post("/feeds/{fid}/favourites")
@@ -109,15 +110,17 @@ def create_app(catalog=None, store=None, start_trainer=True):
         _feed(fid, user)
         v, _ = state["trainer"].current()
         matched, missing = [], []
-        rng = np.random.default_rng(zlib.crc32(fid.encode()))
-        for t in body.titles:
-            idx = state["catalog"].match_title(t)
+        cat = state["catalog"]
+        wanted = [(t, cat.match_title(t)) for t in body.titles] + [(m, cat.id_to_idx.get(m)) for m in body.movie_ids]
+        for t, idx in wanted:
             if idx is None:
                 missing.append(t)
                 continue
-            split = "holdout" if rng.random() < body.holdout_frac else "train"
+            # seeded per film so favourites added one at a time still split ~holdout_frac
+            r = np.random.default_rng(zlib.crc32(f"{fid}/{idx}".encode())).random()
+            split = "holdout" if r < body.holdout_frac else "train"
             state["store"].add_event(fid, idx, "favourite", v, split=split)
-            matched.append({"title": state["catalog"].movies[idx]["title"], "split": split})
+            matched.append({"id": cat.movies[idx]["id"], "title": cat.movies[idx]["title"], "split": split})
         for _ in matched:
             state["trainer"].notify_event()
         return {"matched": matched, "missing": missing}
