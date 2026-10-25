@@ -7,6 +7,12 @@ import { Wordmark } from '../components/ui';
 import './training.css';
 
 type Step = 'name' | 'feeling' | 'screenshots' | 'watch' | 'done';
+const VOTE_CHOICES = [
+  { label: 'love', title: 'Like', positive: true, seen: false },
+  { label: 'nah', title: 'Dislike', positive: false, seen: false },
+  { label: 'seen_loved', title: 'Like', positive: true, seen: true },
+  { label: 'seen_disliked', title: 'Dislike', positive: false, seen: true },
+] as const;
 interface Recommendation {
   rec_id: number;
   w_version: number;
@@ -90,7 +96,7 @@ export function Training() {
       return;
     }
     if (files.length + added.length > 3) {
-      setError('Choose exactly 3 screenshots. Remove one before adding another.');
+      setError('Choose up to 3 screenshots. Remove one before adding another.');
       return;
     }
     setError('');
@@ -106,7 +112,7 @@ export function Training() {
   }
 
   const heading = {
-    name: 'What should we call you?',
+    name: 'What do your friends call you?',
     feeling: 'How do you want to feel tonight?',
     screenshots: 'Show us your Explore page.',
     watch: rec ? rec.movie.title : 'Your next trailer is waiting.',
@@ -120,8 +126,8 @@ export function Training() {
         <header className="ps-top"><a href="/" aria-label="Filmocracy home"><Wordmark /></a><span className="training-label">Taste training</span></header>
         <h1 id="training-content" ref={title} tabIndex={-1} className="ps-title display">{heading}</h1>
         {step === 'name' && <form className="training-form" onSubmit={submitName}>
-          <p className="ps-sub">No account needed. Pick a name, choose a feeling, and share 3 Explore screenshots. Then watch trailers and vote.</p>
-          <label className="field">First name<input className="field-text" name="name" autoComplete="given-name" placeholder="Alex…" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} required /></label>
+          <p className="ps-sub">No account needed. Pick a name, choose a feeling, and share 1–3 Explore screenshots. Then watch trailers and vote.</p>
+          <label className="field">First name<input className="field-text" name="name" autoComplete="given-name" placeholder="Alex…" value={name} onChange={(e) => setName(e.target.value)} maxLength={20} required /></label>
           <div className="ps-foot"><button className="btn btn-primary" disabled={busy || !name.trim()}>Continue <ArrowRight aria-hidden="true" /></button></div>
         </form>}
         {step === 'feeling' && <>
@@ -132,17 +138,17 @@ export function Training() {
           <div className="ps-foot"><button className="btn btn-primary" disabled={!feeling} onClick={() => setStep('screenshots')}>Continue <ArrowRight aria-hidden="true" /></button></div>
         </>}
         {step === 'screenshots' && <>
-          <ol className="howto-shots"><li>Open Instagram and tap the search tab.</li><li>Take a screenshot, scroll, and repeat twice.</li><li>Add all 3 screenshots below.</li></ol>
+          <ol className="howto-shots"><li>Open Instagram and tap the search tab.</li><li>Take a screenshot and add it below.</li><li>Optional: scroll and add up to 2 more for sharper picks.</li></ol>
           <div className="shots">
             {Array.from({ length: 3 }, (_, i) => <div key={i} className={`shot-slot ${files[i] ? 'is-filled' : ''}`}>
-              {files[i] ? <><img src={previews[i]} alt={`Explore screenshot ${i + 1}`} width={90} height={160} /><button className="training-remove" disabled={busy} aria-label={`Remove screenshot ${i + 1}`} onClick={() => setShots(files.filter((_, j) => j !== i))}><X aria-hidden="true" /></button></> : <ImagePlus aria-hidden="true" />}
+              {files[i] ? <><img src={previews[i]} alt={`Explore screenshot ${i + 1}`} width={90} height={160} /><button className="training-remove" disabled={busy} aria-label={`Remove screenshot ${i + 1}`} onClick={() => setShots(files.filter((_, j) => j !== i))}><X aria-hidden="true" /></button></> : <><ImagePlus aria-hidden="true" />{i > 0 && <small>Optional</small>}</>}
             </div>)}
           </div>
-          <p className="training-note" role="status">{files.length} of 3 screenshots added. JPEG, PNG or WebP, up to 10 MB each.</p>
+          <p className="training-note" role="status">{files.length} of 3 screenshots added. Only 1 is needed. JPEG, PNG or WebP, up to 10 MB each.</p>
           <input ref={input} name="screenshots" className="sr-only" aria-label="Choose Explore screenshots" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy} onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} />
           <div className="ps-foot">
-            {files.length < 3 && <button className="btn btn-primary" disabled={busy} onClick={() => input.current?.click()}><ImagePlus aria-hidden="true" />Add screenshots</button>}
-            <button className={files.length === 3 ? 'btn btn-primary' : 'btn btn-ghost'} disabled={busy || files.length !== 3} onClick={() => void run(async () => {
+            {files.length < 3 && <button className={files.length ? 'btn btn-ghost' : 'btn btn-primary'} disabled={busy} onClick={() => input.current?.click()}><ImagePlus aria-hidden="true" />{files.length ? 'Add another (optional)' : 'Add screenshots'}</button>}
+            <button className="btn btn-primary" disabled={busy || files.length === 0} onClick={() => void run(async () => {
               const form = new FormData(); files.forEach((file) => form.append('files', file));
               const result = await http<{ feed_id: string; tags: Record<string, number> }>('/training/feeds', form);
               setFeed(result.feed_id); setTags(Object.keys(result.tags).slice(0, 6)); setShots([]); setStep('watch');
@@ -151,32 +157,54 @@ export function Training() {
             <p className="fineprint">Filmocracy sends these images to Muse Spark to read your taste. The backend stores the resulting taste profile, not the screenshots.</p>
           </div>
         </>}
-        {step === 'watch' && <>
-          <p className="ps-sub">{rec ? `${rec.movie.year ?? ''} · Watch the trailer, then vote. Your answer stays private.` : 'Your taste profile is saved. Find a trailer when you’re ready.'}</p>
-          {rec && <>
-            <iframe key={rec.rec_id} className="training-trailer" title={`${rec.movie.title} trailer`} src={`https://www.youtube-nocookie.com/embed/${rec.movie.trailer_key}?rel=0&playsinline=1`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen referrerPolicy="strict-origin-when-cross-origin" />
-            {rec.movie.overview && <p className="training-note">{rec.movie.overview}</p>}
-            <a className="training-youtube" href={`https://www.youtube.com/watch?v=${rec.movie.trailer_key}`} target="_blank" rel="noreferrer">Trailer won’t play? Open on YouTube</a>
-          </>}
-          <p className="training-note" role="status">{votes} {votes === 1 ? 'vote' : 'votes'} saved{notice ? ` · ${notice}` : ''}</p>
-          {tags.length > 0 && <ul className="tags" aria-label="Your taste tags">{tags.map((tag) => <li key={tag}>{tag}</li>)}</ul>}
-          <div className="ps-foot">
-            {rec && !saved ? <div className="training-votes">
-              {(['nah', 'love'] as const).map((label) => <button key={label} className={`btn ${label === 'love' ? 'btn-primary' : 'btn-ghost'}`} disabled={busy} onClick={() => void run(async () => {
-                await http('/feedback', { rec_id: rec.rec_id, label });
-                setSaved(true); setVotes((n) => n + 1); setNotice('Vote saved');
-              })}>{label === 'love' ? <ThumbsUp aria-hidden="true" /> : <ThumbsDown aria-hidden="true" />}{label === 'love' ? 'Yes, I’d Watch' : 'Not for Me'}</button>)}
-            </div> : <button className="btn btn-primary" disabled={busy || !feed} onClick={() => void run(() => next(feed!))}>{busy ? 'Finding a trailer…' : 'Next Trailer'}<ArrowRight aria-hidden="true" /></button>}
-            {rec && !saved && <button className="btn btn-ghost" disabled={busy} onClick={() => void run(() => next(feed!))}>Skip without voting</button>}
-            <button className="btn btn-ghost" disabled={busy} onClick={() => setStep('done')}>Finish for now</button>
+        {step === 'watch' && <div className="training-watch">
+          <div className="training-player">
+            {rec ? <>
+              <iframe
+                key={rec.rec_id}
+                className="training-trailer"
+                title={`${rec.movie.title} trailer`}
+                src={`https://www.youtube-nocookie.com/embed/${rec.movie.trailer_key}?rel=0&playsinline=1`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+              <p className="training-note">{rec.movie.year ? `${rec.movie.year} · ` : ''}Watch the trailer, then vote below.</p>
+              <a className="training-youtube" href={`https://www.youtube.com/watch?v=${rec.movie.trailer_key}`} target="_blank" rel="noreferrer">Trailer won’t play? Open on YouTube</a>
+            </> : <p className="ps-sub">Your taste profile is saved. Find a trailer when you’re ready.</p>}
           </div>
-        </>}
+          <section className="training-ballot" aria-labelledby="training-vote-title">
+            <h2 id="training-vote-title" className="display training-ballot-title">{saved ? 'Vote saved.' : rec ? 'What do you think?' : 'Ready for a trailer?'}</h2>
+            <p className="training-note" role="status">{votes} {votes === 1 ? 'vote' : 'votes'} saved · {notice || 'Your vote stays private.'}</p>
+            {rec && !saved ? <div className="training-votes">
+              {VOTE_CHOICES.map((vote) => <button
+                key={vote.label}
+                className={`vote-btn ${vote.positive ? 'vote-btn--yes' : 'vote-btn--no'}`}
+                disabled={busy}
+                aria-busy={busy}
+                onClick={() => void run(async () => {
+                  await http('/feedback', { rec_id: rec.rec_id, label: vote.label });
+                  setSaved(true); setVotes((n) => n + 1); setNotice('Vote saved');
+                })}
+              >{vote.positive ? <ThumbsUp aria-hidden="true" /> : <ThumbsDown aria-hidden="true" />}<span>{vote.title}{vote.seen && <small>and have seen it</small>}</span></button>)}
+            </div> : <button className="btn btn-primary" disabled={busy || !feed} onClick={() => void run(() => next(feed!))}>{busy ? 'Finding a trailer…' : 'Next Trailer'}<ArrowRight aria-hidden="true" /></button>}
+            <div className="training-secondary">
+              {rec && !saved && <button className="btn btn-ghost" disabled={busy} onClick={() => void run(() => next(feed!))}>Skip trailer</button>}
+              <button className="btn btn-ghost" disabled={busy} onClick={() => setStep('done')}>Finish for now</button>
+            </div>
+          </section>
+          {(rec?.movie.overview || tags.length > 0) && <details className="training-about">
+            <summary>About this pick</summary>
+            {rec?.movie.overview && <p className="training-note">{rec.movie.overview}</p>}
+            {tags.length > 0 && <ul className="tags" aria-label="Your taste tags">{tags.map((tag) => <li key={tag}>{tag}</li>)}</ul>}
+          </details>}
+        </div>}
         {step === 'done' && <>
           <Check className="training-check" aria-hidden="true" />
           <p className="ps-sub">{votes} {votes === 1 ? 'vote' : 'votes'} saved, {name || 'movie fan'}. Your feedback is ready for Filmocracy’s trainer.</p>
           <div className="ps-foot">{feed && <button className="btn btn-primary" disabled={busy} onClick={() => void run(async () => { if (await next(feed)) setStep('watch'); })}>Watch more trailers <ArrowRight aria-hidden="true" /></button>}<a className="btn btn-ghost" href="/">Back to Filmocracy</a></div>
         </>}
-        {busy && <p className="training-note" role="status">{step === 'screenshots' ? 'Reading all 3 screenshots. This can take a minute; keep this page open.' : 'Saving or finding your next trailer…'}</p>}
+        {busy && <p className="training-note" role="status">{step === 'screenshots' ? 'Reading your screenshots. This can take a minute; keep this page open.' : 'Saving or finding your next trailer…'}</p>}
         {error && <p className="field-error" role="alert">{error}</p>}
         {training === false && <p className="training-note">Votes are saved. Automatic model training is currently off on this server.</p>}
       </section>

@@ -1,7 +1,7 @@
 # Individual training on a self-hosted laptop
 
-Open `/training`: First name → feeling → **exactly 3 Explore
-screenshots** → trailers and private yes/no votes. Each image must be JPEG, PNG
+Open `/training`: First name → feeling → **1–3 Explore
+screenshots** → trailers and private four-choice votes. Each image must be JPEG, PNG
 or WebP, up to 10 MiB. No TV, room or invitation is required. The page uses the
 existing Velvet design, browser identity, Muse tiling, recommender and feedback format.
 
@@ -90,14 +90,14 @@ existing movie-night WebSockets continue using WSS with an HTTPS API URL.
 ## API and persistence
 
 - `POST /profiles/me`: save the caller's display name.
-- `POST /training/feeds`: multipart `files` with exactly three images. Returns
+- `POST /training/feeds`: multipart `files` with one to three images. Returns
   `feed_id`, weighted tags and noise count. Images go to Muse for processing;
   the backend stores the resulting profile, not original screenshots.
 - `POST /training/feeds/{feed_id}/next`: JSON `{"boost":["comedy"]}`. Requires
   ownership and returns `rec_id`, `w_version`, and `movie`. Uses the existing
   scorer, popularity prior, vote pull and tag boost. Only existing mapped movies
   with playable catalog trailers are eligible; no catalog import is performed.
-- `POST /feedback`: `{"rec_id":123,"label":"love"}` or `"nah"`. Existing
+- `POST /feedback`: `{"rec_id":123,"label":"love"}`, `"nah"`, `"seen_loved"`, or `"seen_disliked"`. Existing
   ownership checks apply. Retrying replaces the feed/movie label instead of
   adding a second training example, and notifies the existing trainer.
 
@@ -151,3 +151,7 @@ installer copies this variable from the keys file if it is not already set in
 the production environment. Keep one worker and preserve the runtime directory
 and checkpoints together. No service installation or remote deployment is needed
 for local testing; see [self-hosting](self-hosting.md) for the existing services.
+
+The training voting screen places the embedded trailer above a dedicated four-button panel: Like, Dislike, Like and have seen it, and Dislike and have seen it. Details and taste tags are collapsed below the voting controls. One, two or three screenshots can start training; additional images are optional.
+
+Seen status is retained in each feedback label. `love` and `seen_loved` use the existing positive-training path; `nah` and `seen_disliked` use the existing negative-training path. The scoring formula and training weights are unchanged.

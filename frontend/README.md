@@ -73,4 +73,4 @@ Votes stay private: the server never sends how anyone voted, only who has voted 
 
 ## Individual training
 
-Open `/training` for a name, a feeling, exactly three Explore screenshots, then trailer voting without a TV session. The existing automatic trainer is opt-in through `TANDEM_TRAINING_ENABLED=1`. See [the training guide](../docs/training.md).
+Open `/training` for a name, a feeling, one to three Explore screenshots, then trailer voting without a TV session. The existing automatic trainer is opt-in through `TANDEM_TRAINING_ENABLED=1`. See [the training guide](../docs/training.md).

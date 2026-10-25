@@ -142,7 +142,8 @@
             "enum": [
               "love",
               "seen_loved",
-              "nah"
+              "nah",
+              "seen_disliked"
             ],
             "title": "Label",
             "type": "string"

@@ -51,7 +51,7 @@ N_EXPLORE = 2
 EXPLORE_RANKS = (10, 50)   # exploration picks come from ranks 11–50
 
 POSITIVE_LABELS = {"love", "seen_loved", "favourite"}
-NEGATIVE_LABELS = {"nah"}
+NEGATIVE_LABELS = {"nah", "seen_disliked"}
 TAG_BOOST = _env("TANDEM_TAG_BOOST", 0.15, float)   # added to films carrying any tag the host asked to boost
 POP_INIT = _env("TANDEM_POP_INIT", 0.05, float)     # starting weight on the popularity prior; training learns it from there
 VOTE_PULL = _env("TANDEM_VOTE_PULL", 0.1, float)    # each vote (up to 10) pulls the taste this far toward loved films, before any retrain

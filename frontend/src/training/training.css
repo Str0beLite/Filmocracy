@@ -1,6 +1,6 @@
 .training-page { gap: 12px; }
 .training-page .ps-title { overflow-wrap: anywhere; }
-.training-page .feeling[aria-pressed='true'] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, var(--surface)); }
+.training-page .feeling[aria-pressed='true'] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, var(--surface)); box-shadow: inset 0 0 0 1px var(--gold); }
 .training-page .feeling[aria-pressed='true'] svg { color: var(--gold); }
 .training-page .feeling:not([aria-pressed='true']):hover { border-color: var(--line-strong); }
 .training-skip { position: absolute; z-index: 10; top: 12px; left: 12px; padding: 12px; background: var(--bg); }
@@ -14,13 +14,26 @@
 .training-remove:hover { background: var(--surface-2); }
 .training-remove svg { width: 18px; height: 18px; }
 .training-trailer { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 12px; background: var(--stage); }
+.training-watch { display: flex; flex: 1; flex-direction: column; gap: 20px; }
+.training-player { display: flex; flex-direction: column; gap: 8px; }
+.training-ballot { display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
+.training-ballot-title { font-size: 28px; line-height: 1.15; }
 .training-votes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.training-votes .btn { padding-inline: 12px; font-size: 14px; }
+.training-votes .vote-btn { min-height: 84px; gap: 6px; padding: 8px; border-radius: 16px; font-size: 18px; line-height: 1.2; }
+.training-votes .vote-btn svg { width: 28px; height: 28px; }
+.training-votes .vote-btn small { display: block; margin-top: 2px; font-size: 12px; font-weight: 600; }
+.training-secondary { display: flex; gap: 10px; }
+.training-secondary .btn { flex: 1; min-height: 44px; padding: 10px 12px; font-size: 14px; }
+.training-about { color: var(--muted); font-size: 14px; }
+.training-about summary { cursor: pointer; padding-block: 6px; }
+.training-about summary:hover { color: var(--text); }
+.training-about p { padding-top: 12px; }
 .training-check { width: 48px; height: 48px; color: var(--yes); }
 .training-page .tags { margin-block: 8px; }
 .training-page--watch { max-width: 780px; }
+.training-page--watch .ps-title { margin-block: 12px 0; }
 @media (min-width: 600px) {
   .training-page { padding: 32px; }
   .training-page--watch .ps-title { font-size: 42px; }
+  .training-page--watch .training-trailer { max-height: min(36dvh, 360px); }
 }
-@media (max-width: 360px) { .training-votes { grid-template-columns: 1fr; } }

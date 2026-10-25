@@ -146,8 +146,8 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
     async def training_feed(
         files: Annotated[list[UploadFile], File()], user: str = Depends(identity)
     ):
-        if len(files) != 3:
-            raise HTTPException(422, "Upload exactly 3 Explore screenshots")
+        if not 1 <= len(files) <= 3:
+            raise HTTPException(422, "Upload 1 to 3 Explore screenshots")
         if any(f.content_type not in {"image/jpeg", "image/png", "image/webp"} for f in files):
             raise HTTPException(422, "Screenshots must be JPEG, PNG or WebP images")
         if any(f.size is None or f.size > 10 * 1024 * 1024 for f in files):
@@ -306,7 +306,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         rec_id: Optional[int] = None
         feed_id: Optional[str] = None
         movie_id: Optional[int] = None  # catalog movie id, for feedback outside a rec list (e.g. a group vote)
-        label: Literal["love", "seen_loved", "nah"]
+        label: Literal["love", "seen_loved", "nah", "seen_disliked"]
 
     @app.post("/feedback")
     def feedback(body: Feedback, user: str = Depends(identity)):
