@@ -9,15 +9,16 @@ The Filmocracy app: the big screen (TV, laptop, projector) and the phone, in the
 Needs Node 20.19 or newer (Node 24 LTS on the team laptop) and the backend's Python environment (see `backend/README.md`). From the repo root, in two terminals:
 
 ```bash
-# 1. Backend on :8000. backend/.env needs MUSE_API_KEY, YOUTUBE_API_KEY,
-#    TANDEM_DEV_AUTH=1 for local sign-in, and FRONTEND_ORIGINS listing http://localhost:5173
-#    and the laptop's Wi-Fi address (http://<ip>:5173) so phones can open the WebSocket.
-backend/.venv/bin/uvicorn unified:app --app-dir backend --env-file backend/.env --host 0.0.0.0 --port 8000
+# 1. Local backend on :8000, with its own database in backend/data. First run creates the venv
+#    and backend/.env; add MUSE_API_KEY there to read screenshots (YOUTUBE_API_KEY is optional).
+backend/dev.sh
 
 # 2. Frontend on :5173. It forwards /api (and the WebSocket) to the backend.
 npm --prefix frontend install
 npm --prefix frontend run dev
 ```
+
+Leave `VITE_API_URL` out of `frontend/.env.local`, or the dev server talks to that backend instead (`https://api.filmocracy.party` is production). On the machine that hosts production, :8000 is taken: run `backend/dev.sh 8001` and `TANDEM_BACKEND=http://localhost:8001 npm --prefix frontend run dev`.
 
 Sign-in is a random user id each browser keeps (`src/api/auth.ts`). Put `VITE_DEV_AUTH=1` in `frontend/.env.local` to give each phone tab its own id, so one laptop can play a whole group.
 
