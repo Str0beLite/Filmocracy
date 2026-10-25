@@ -11,4 +11,4 @@ Once it runs, replace this README with: how to install, how to run, and the env 
 
 ## SQLite backend integration
 
-Use [the current backend guide](../docs/unified-backend.md). `session-client.js` accepts `{ apiUrl, getToken, storage }`, restores the TV session through REST using main's Google ID tokens, and stores only the session UUID. Use authenticated fetch-based SSE for live updates. Run its checks from the repo root: `node --test frontend/session-client.test.mjs`.
+Use [the current backend guide](../docs/unified-backend.md). `session-client.js` accepts `{ apiUrl, getToken, storage }`, restores the TV session through REST using main's Google ID tokens, and stores only the session UUID. Use the exported `connectSession` WebSocket helper for live snapshots and heartbeats; the guide documents authentication, message formats, and reconnect handling. Run its checks from the repo root: `node --test frontend/session-client.test.mjs`.

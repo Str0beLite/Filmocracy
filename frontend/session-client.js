@@ -48,3 +48,34 @@ export function createTvSessionClient({ apiUrl = "", getToken, fetchImpl = globa
     },
   };
 }
+
+// Shared by phones and the TV. Reconnect by calling again with a fresh Google token.
+export async function connectSession({ apiUrl, sessionId, getToken, onState, onClose,
+  WebSocketImpl = globalThis.WebSocket }) {
+  const token = await getToken();
+  if (!token) throw new Error("Google sign-in required");
+  const url = new URL(`${apiUrl.replace(/\/$/, "")}/sessions/${encodeURIComponent(sessionId)}/ws`,
+    globalThis.location?.href);
+  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const socket = new WebSocketImpl(url.href);
+  let revision = -1;
+  let heartbeat;
+  socket.onopen = () => {
+    socket.send(JSON.stringify({ type: "auth", token }));
+    heartbeat = setInterval(() => {
+      if (socket.readyState === 1) socket.send(JSON.stringify({ type: "heartbeat" }));
+    }, 10000);
+  };
+  socket.onmessage = event => {
+    const message = JSON.parse(event.data);
+    if (message.type === "state" && message.revision > revision) {
+      revision = message.revision;
+      onState(message.state);
+    }
+  };
+  socket.onclose = event => {
+    clearInterval(heartbeat);
+    onClose?.(event);
+  };
+  return socket;
+}
