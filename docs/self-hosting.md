@@ -47,7 +47,11 @@ deploy/selfhost/install.sh
 This takes a few minutes the first time, mostly installing torch. It does the following:
 - Clones the repo to `~/filmocracy-live`. That copy is deploy-only, so keep working in your normal checkout.
 - Creates the clone's own venv.
-- Writes `~/.config/filmocracy/backend.env` from your `backend/.env`. It drops `TANDEM_DEV_AUTH` and adds `TANDEM_DATA_DIR` and `FRONTEND_ORIGINS`. To change keys later, edit that file and run `systemctl --user restart filmocracy-api`.
+- Fills `~/.config/filmocracy/backend.env` with every key from a keys file. The default is `backend/.env`, or pass a path: `install.sh path/to/keys.env`.
+  - Keys already in the production file are kept.
+  - `TANDEM_DEV_AUTH`, `TANDEM_DATA_DIR`, `FRONTEND_ORIGINS` and `GOOGLE_CLIENT_ID` are never copied. It sets `TANDEM_DATA_DIR` and `FRONTEND_ORIGINS` itself.
+  - It warns if `MUSE_API_KEY` or `YOUTUBE_API_KEY` is missing.
+  - To change a key later, edit that file and run `systemctl --user restart filmocracy-api`.
 - Installs three systemd user units from `deploy/selfhost/`:
 
 | Unit | What it does |
@@ -69,11 +73,23 @@ journalctl --user -u filmocracy-api -f      # API logs
 journalctl --user -u filmocracy-deploy      # "deployed <sha>" after each push
 ```
 
+## Moving to a new host
+
+`~/.config/filmocracy/backend.env` holds every production key, so it's the one file to carry over. Never commit it.
+
+1. On the new host, clone the repo and install cloudflared (step 1 above, just the download).
+2. Copy these over from the old host:
+   - `~/.config/filmocracy/backend.env`: the keys.
+   - `~/.cloudflared/`: the same tunnel, so DNS stays as it is. In `config.yml`, fix the `credentials-file` path if your home folder differs.
+   - `~/.local/share/filmocracy/`, optionally: the votes and trained W. Copy it while the old API is stopped.
+3. Stop the old host's services: `systemctl --user disable --now filmocracy-api filmocracy-tunnel filmocracy-deploy.timer`.
+4. On the new host, run `deploy/selfhost/install.sh ~/.config/filmocracy/backend.env`.
+
 ## Frontend: Cloudflare Pages (one-time setup)
 
 1. In the Cloudflare dashboard, go to **Workers & Pages**, then **Create**, then **Pages**, then **Connect to Git**, and pick `Str0beLite/Filmocracy`. Set the production branch to `main`.
 2. Use these build settings: root directory `frontend`, build command `npm run build`, output directory `dist`.
-3. Set these environment variables: `VITE_API_URL=https://api.filmocracy.party` and `VITE_TMDB_TOKEN=<TMDB read token>`.
+3. Set the environment variable `VITE_TMDB_TOKEN=<TMDB read token>`. `VITE_API_URL` comes from the committed `frontend/.env.production`.
 4. After the first build, go to **Custom domains** and add `filmocracy.party`. Cloudflare creates the DNS record.
 
 From then on, every push to `main` redeploys the frontend, and the timer redeploys the backend within about a minute.
