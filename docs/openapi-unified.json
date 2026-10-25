@@ -159,6 +159,21 @@
         "title": "Feedback",
         "type": "object"
       },
+      "Feeling": {
+        "properties": {
+          "feeling": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Feeling",
+            "type": "string"
+          }
+        },
+        "required": [
+          "feeling"
+        ],
+        "title": "Feeling",
+        "type": "object"
+      },
       "GroupRecsReq": {
         "properties": {
           "boost": {
@@ -227,6 +242,31 @@
           "invite_token"
         ],
         "title": "JoinSession",
+        "type": "object"
+      },
+      "MemberState": {
+        "properties": {
+          "feeling": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feeling"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "feeling"
+        ],
+        "title": "MemberState",
         "type": "object"
       },
       "NewGroup": {
@@ -312,6 +352,49 @@
           "predicted_score"
         ],
         "title": "RankedMovie",
+        "type": "object"
+      },
+      "Reaction": {
+        "properties": {
+          "emoji": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Emoji",
+            "type": "string"
+          }
+        },
+        "required": [
+          "emoji"
+        ],
+        "title": "Reaction",
+        "type": "object"
+      },
+      "ReactionRecord": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "emoji": {
+            "title": "Emoji",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "emoji",
+          "created_at"
+        ],
+        "title": "ReactionRecord",
         "type": "object"
       },
       "RoundResponse": {
@@ -483,11 +566,27 @@
       },
       "SQLiteSessionState": {
         "properties": {
+          "member_state": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/MemberState"
+            },
+            "title": "Member State",
+            "type": "array"
+          },
           "profiles": {
             "items": {
               "$ref": "#/components/schemas/Profile"
             },
             "title": "Profiles",
+            "type": "array"
+          },
+          "reactions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReactionRecord"
+            },
+            "title": "Reactions",
             "type": "array"
           },
           "round_participants": {
@@ -497,8 +596,27 @@
             "title": "Round Participants",
             "type": "array"
           },
+          "server_now": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Server Now"
+          },
           "session": {
             "$ref": "#/components/schemas/SQLiteGroupSession"
+          },
+          "session_feeds": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Session Feeds",
+            "type": "array"
           },
           "session_members": {
             "items": {
@@ -513,6 +631,12 @@
             },
             "title": "Session Movies",
             "type": "array"
+          },
+          "stage": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Stage",
+            "type": "object"
           },
           "votes": {
             "items": {
@@ -655,6 +779,20 @@
           "shown_at"
         ],
         "title": "SessionMovie",
+        "type": "object"
+      },
+      "Stage": {
+        "properties": {
+          "stage": {
+            "additionalProperties": true,
+            "title": "Stage",
+            "type": "object"
+          }
+        },
+        "required": [
+          "stage"
+        ],
+        "title": "Stage",
         "type": "object"
       },
       "ValidationError": {
@@ -1909,6 +2047,64 @@
         "summary": "Bind"
       }
     },
+    "/sessions/{sid}/feeling": {
+      "post": {
+        "operationId": "feeling_sessions__sid__feeling_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Feeling"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Feeling"
+      }
+    },
     "/sessions/{sid}/heartbeat": {
       "post": {
         "operationId": "heartbeat_sessions__sid__heartbeat_post",
@@ -2161,6 +2357,123 @@
           }
         },
         "summary": "Rankings"
+      }
+    },
+    "/sessions/{sid}/react": {
+      "post": {
+        "operationId": "react_sessions__sid__react_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Reaction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "React"
+      }
+    },
+    "/sessions/{sid}/stage": {
+      "post": {
+        "description": "Host only. The TV publishes what it's showing; phones follow it from the snapshot.",
+        "operationId": "stage_sessions__sid__stage_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sid",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Sid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Authorization",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Stage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Stage"
       }
     },
     "/sessions/{sid}/votes": {

@@ -27,10 +27,11 @@ export function fmtTime(ms: number) {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 }
 
-// The URL in the TV's QR code. When the TV runs on localhost, phones need the
-// laptop's Wi-Fi address instead (vite.config.ts works it out).
-export function joinUrl(code: string) {
+// The URL in the TV's QR code, carrying the session's invitation in the
+// fragment (never sent to a server). When the TV runs on localhost, phones
+// need the laptop's Wi-Fi address instead (vite.config.ts works it out).
+export function joinUrl(invite: string) {
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   const origin = local && __LAN_ORIGIN__ ? __LAN_ORIGIN__ : location.origin;
-  return `${origin}/phone/join?room=${code}`;
+  return `${origin}/phone/join#invite=${invite}`;
 }

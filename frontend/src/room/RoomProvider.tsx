@@ -1,12 +1,13 @@
 // Keeps every screen in sync with the room. Until the first snapshot lands,
-// shows a quiet "finding the room" state instead of half-empty screens.
+// shows a quiet "finding the room" state instead of half-empty screens. The
+// big screen hosts with its own device key, so it opens straight on the theater.
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { connect, type Snapshot } from '../api';
 import { Wordmark } from '../components/ui';
 import { RoomCtx } from './useRoom';
 
-export function RoomProvider({ children }: { children: ReactNode }) {
+function Room({ children }: { children: ReactNode }) {
   const [s, setS] = useState<Snapshot | null>(null);
   const [online, setOnline] = useState(true);
   const [offset, setOffset] = useState(0);
@@ -16,7 +17,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       connect(
         (snap) => {
           setS(snap);
-          setOffset(snap.serverNow - Date.now());
+          if (snap.serverNow) setOffset(snap.serverNow - Date.now());
         },
         setOnline,
       ),
@@ -41,4 +42,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       )}
     </RoomCtx.Provider>
   );
+}
+
+export function RoomProvider({ children }: { children: ReactNode }) {
+  // The dev home page isn't a device; it doesn't join or host anything.
+  if (location.pathname === '/') return children;
+  return <Room>{children}</Room>;
 }

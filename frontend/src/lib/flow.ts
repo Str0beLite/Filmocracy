@@ -31,7 +31,7 @@ export function phonePath(s: Snapshot, me: string): string {
     case 'lobby':
       return '/phone/lobby';
     case 'trailer':
-      return `/phone/react/${s.round}`;
+      return `/phone/${s.locked.includes(me) ? 'voted' : 'react'}/${s.round}`;
     case 'vote':
       return `/phone/${s.locked.includes(me) ? 'voted' : 'vote'}/${s.round}`;
     case 'reveal':

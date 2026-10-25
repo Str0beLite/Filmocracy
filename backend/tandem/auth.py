@@ -13,6 +13,10 @@ def current_user(authorization: str = Header("")):
     token = authorization.removeprefix("Bearer ").strip()
     if config.DEV_AUTH and token:
         return token
+    # The big screen hosts without Google: its id is a random key it keeps in
+    # localStorage. Google `sub`s are numeric, so this can't pose as a phone.
+    if token.startswith("tv-") and len(token) >= 35:
+        return token
     if not token or not config.GOOGLE_CLIENT_ID:
         raise HTTPException(401, "sign in with Google")
     try:

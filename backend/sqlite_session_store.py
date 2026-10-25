@@ -12,6 +12,10 @@ from uuid import uuid4
 from fastapi import HTTPException
 
 
+STAGE_MAX_BYTES = 16384
+REACTION_SECONDS = 8   # reactions older than this drop out of snapshots
+
+
 class SessionStore:
     def __init__(self, store, catalog, metadata, clock=time.time):
         self.store, self.catalog, self.clock = store, catalog, clock
@@ -329,6 +333,27 @@ class SessionStore:
                     dict(row)
                     for row in db.execute(f"SELECT * FROM {table} WHERE session_id=?", (sid,))
                 ]
+            stage = db.execute("SELECT stage FROM tandem_stage WHERE session_id=?", (sid,)).fetchone()
+            out["stage"] = json.loads(stage["stage"]) if stage else {}
+            out["member_state"] = [
+                dict(row)
+                for row in db.execute(
+                    "SELECT user_id,feeling FROM tandem_member_state WHERE session_id=?", (sid,)
+                )
+            ]
+            out["session_feeds"] = [
+                row["user_id"]
+                for row in db.execute("SELECT user_id FROM session_feeds WHERE session_id=?", (sid,))
+            ]
+            out["reactions"] = [
+                dict(row)
+                for row in db.execute(
+                    "SELECT id,user_id,emoji,created_at FROM tandem_reactions "
+                    "WHERE session_id=? AND created_at>? ORDER BY id",
+                    (sid, self.stamp(-REACTION_SECONDS)),
+                )
+            ]
+            out["server_now"] = self.stamp()
             out["profiles"] = [
                 dict(row)
                 for row in db.execute(
@@ -338,6 +363,46 @@ class SessionStore:
                 )
             ]
         return out
+
+    def set_stage(self, sid, user, stage):
+        """Host only: what the TV is showing, as JSON every member receives in the snapshot."""
+        text = json.dumps(stage, separators=(",", ":"))
+        if len(text) > STAGE_MAX_BYTES:
+            raise HTTPException(413, "Stage too large")
+        with self.transaction() as db:
+            self.member(db, sid, user, host=True)
+            db.execute(
+                "INSERT INTO tandem_stage VALUES (?,?) ON CONFLICT(session_id) "
+                "DO UPDATE SET stage=excluded.stage",
+                (sid, text),
+            )
+            self.touch(db, sid)
+        return {"ok": True}
+
+    def set_feeling(self, sid, user, feeling):
+        with self.transaction() as db:
+            self.member(db, sid, user)
+            db.execute(
+                "INSERT INTO tandem_member_state VALUES (?,?,?) ON CONFLICT(session_id,user_id) "
+                "DO UPDATE SET feeling=excluded.feeling",
+                (sid, user, feeling),
+            )
+            self.touch(db, sid)
+        return {"ok": True}
+
+    def react(self, sid, user, emoji):
+        with self.transaction() as db:
+            self.member(db, sid, user)
+            db.execute(
+                "DELETE FROM tandem_reactions WHERE session_id=? AND created_at<=?",
+                (sid, self.stamp(-REACTION_SECONDS)),
+            )
+            db.execute(
+                "INSERT INTO tandem_reactions(session_id,user_id,emoji,created_at) VALUES (?,?,?,?)",
+                (sid, user, emoji, self.stamp()),
+            )
+            self.touch(db, sid)
+        return {"ok": True}
 
     def get_profile(self, user):
         with self.transaction(write=False) as db:

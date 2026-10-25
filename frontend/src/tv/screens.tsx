@@ -46,9 +46,8 @@ export function TVLobby() {
           </ol>
         </div>
         <div className="qr-card">
-          <QR text={joinUrl(s.code)} />
+          <QR text={joinUrl(s.invite)} />
           <span className="qr-label">Scan to join</span>
-          <span className="qr-code">Room code {s.code}</span>
         </div>
       </div>
 
@@ -176,7 +175,7 @@ export function TVTrailer() {
   const { s } = useRoom();
   const now = useServerNow();
   const film = movie(s.movieId!);
-  const trailer = useTrailer(film.tmdbId);
+  const trailer = useTrailer(film.tmdbId, film.trailerKey);
   const [failed, setFailed] = useState<string | null>(null);
   const onFail = useCallback(() => setFailed(trailer), [trailer]);
   const progress = trailerProgress(s, now);
@@ -208,7 +207,13 @@ export function TVTrailer() {
       <div className="trailer-top">
         <span className="chip">
           <Play aria-hidden="true" fill="currentColor" strokeWidth={0} />
-          Trailer {batchPos(s.round)} of {CHECKPOINT_EVERY} · <b>{film.match}% group match</b>
+          Trailer {batchPos(s.round)} of {CHECKPOINT_EVERY}
+          {film.match !== null && (
+            <>
+              {' '}
+              · <b>{film.match}% group match</b>
+            </>
+          )}
         </span>
       </div>
 
@@ -498,7 +503,7 @@ export function TVPicks() {
                   <Poster movie={film} />
                   <div className="rec-text">
                     <b>{film.title}</b>
-                    {film.wildcard ? <Wildcard /> : <span>{film.match}% match</span>}
+                    {film.wildcard ? <Wildcard /> : film.match !== null && <span>{film.match}% match</span>}
                   </div>
                 </li>
               );

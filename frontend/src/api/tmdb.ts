@@ -35,14 +35,16 @@ export function trailerKey(tmdbId: number | null): Promise<string | null> {
 export const youtubeUrl = (key: string) => `https://www.youtube.com/watch?v=${key}`;
 
 // The YouTube key for a film, or null while loading / when there isn't one.
-export function useTrailer(tmdbId: number | null) {
+// `known` is a trailer the backend already checked is playable; it wins.
+export function useTrailer(tmdbId: number | null, known: string | null = null) {
   const [found, setFound] = useState<{ id: number | null; key: string | null }>({ id: null, key: null });
   useEffect(() => {
+    if (known) return;
     let live = true;
     trailerKey(tmdbId).then((key) => live && setFound({ id: tmdbId, key }));
     return () => {
       live = false;
     };
-  }, [tmdbId]);
-  return found.id === tmdbId ? found.key : null;
+  }, [tmdbId, known]);
+  return known ?? (found.id === tmdbId ? found.key : null);
 }

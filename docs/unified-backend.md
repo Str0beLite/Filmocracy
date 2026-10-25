@@ -166,6 +166,16 @@ The session snapshot is a consistent SQLite read transaction. Background sweeps 
 feedback sync run every 10 seconds in the single service process. No Supabase Realtime,
 RLS, secret/service-role access or database RPC is used by the active backend.
 
+## Live-room extras
+
+The app's TV runs the night around the backend's rounds and shares what's on screen with every phone:
+
+- `POST /sessions/{id}/stage` with `{"stage": {...}}`: host only, any JSON up to 16 KB (phase, round, trailer timing, pause, verdict, picks, now showing). Returned as `stage` in every snapshot.
+- `POST /sessions/{id}/feeling` with `{"feeling": "laugh"}`: the caller's feeling for tonight, returned in `member_state`.
+- `POST /sessions/{id}/react` with `{"emoji": "🔥"}`: returned in `reactions` for 8 seconds.
+
+Snapshots also include `session_feeds` (user ids with a bound feed, i.e. seated) and `server_now` (server time, for timers). All are additive (`session_schema.sql` version 3) and bump the revision, so WebSockets push them like any other change.
+
 ## Failure handling and persistence
 
 Voting/advancement uses its own committed SQLite transaction. A separate, retryable

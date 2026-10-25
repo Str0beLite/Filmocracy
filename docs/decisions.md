@@ -66,3 +66,4 @@ One line each: date, decision, why.
 - 2026-10-25: Merge main 89a01f0 into deployment preparation, retaining personality-first tags and whole-feed summary/fallback, minimal reasoning and the dev-only preview alongside unified authentication, SQLite sessions and WebSockets.
 
 - 2026-10-25: Prepare watchtandem.tech for Cloudflare Pages and api.watchtandem.tech for Railway with exact-origin CORS, GIS ID tokens and a persistent /data volume; wait for the teammate app branch to replace its mock API before frontend deployment.
+- 2026-10-25: The frontend runs on the real session backend (mock backend removed). The TV hosts and runs the night's choreography, publishing it as a host-only session `stage`; phones follow over the WebSocket. Added `stage`, `feeling` and `react` endpoints so reactions, shared pause, verdicts, checkpoints and picks keep working. Dev uses the backend's dev login; production uses Google Identity Services.

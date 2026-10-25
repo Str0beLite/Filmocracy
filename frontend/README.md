@@ -2,29 +2,35 @@
 
 The Tandem app: the big screen (TV, laptop, projector) and the phone, in the Velvet look. Vite + React + TypeScript.
 
-**It runs on a fake backend for now.** A small in-memory room server (`mock-backend/`) runs inside the Vite dev server, so a real night works across the TV and everyone's phones: people join, pick feelings, react and vote, and the server counts votes, runs the timers and moves every screen together. Recommendations are a fixed list of 14 real catalog films, re-ranked by tonight's feelings and votes. The Python backend isn't involved yet.
+**It runs on the real backend** (`backend/unified.py`, see [the unified backend guide](../docs/unified-backend.md)). The TV creates a session and shows its invitation as a QR code; phones sign in, join, upload Explore screenshots (read by Muse Spark) and vote. The backend picks trailers with the recommendation model, counts votes and ranks the picks. The TV runs the night around that (trailer, vote, verdict, picks) and publishes it as the session's *stage*, so every phone follows along over the WebSocket.
 
 ## Run it
 
-Needs Node 20.19 or newer (Node 24 LTS on the team laptop). From the repo root:
+Needs Node 20.19 or newer (Node 24 LTS on the team laptop) and the backend's Python environment (see `backend/README.md`). From the repo root, in two terminals:
 
 ```bash
+# 1. Backend on :8000. backend/.env needs MUSE_API_KEY, YOUTUBE_API_KEY, GOOGLE_CLIENT_ID,
+#    TANDEM_DEV_AUTH=1 for local sign-in, and FRONTEND_ORIGINS listing http://localhost:5173
+#    and the laptop's Wi-Fi address (http://<ip>:5173) so phones can open the WebSocket.
+backend/.venv/bin/uvicorn unified:app --app-dir backend --env-file backend/.env --host 0.0.0.0 --port 8000
+
+# 2. Frontend on :5173. It forwards /api (and the WebSocket) to the backend.
 npm --prefix frontend install
 npm --prefix frontend run dev
 ```
 
+For local sign-in put `VITE_DEV_AUTH=1` in `frontend/.env.local` (matching the backend's `TANDEM_DEV_AUTH=1`): "Sign in with Google" then just asks for a name, and each browser tab is its own person. Without it, the TV and phones use real Google sign-in (`VITE_GOOGLE_CLIENT_ID`).
+
 1. On the laptop, open http://localhost:5173/tv and fullscreen it (F11). Put it on the TV or projector.
 2. Everyone scans the QR code with a phone on the **same Wi-Fi**. The QR points at the laptop's Wi-Fi address even when the TV page is on localhost.
-3. Each phone signs in (for now, "Sign in with Google" just asks for a first name), picks a feeling, adds 3 Explore screenshots, and takes a seat.
+3. Each phone signs in, picks a feeling, adds 1–3 Explore screenshots (one is enough; more steadies the picks. Muse reads every tile, which takes a few seconds), and takes a seat.
 4. Start the show from the big screen.
 
-http://localhost:5173 (dev only) shows the room, a phone QR code, and buttons to jump the room to any screen for review (empty seats get test friends Maya, Jordan and Sam), fill seats, start a new night or reset the room.
+Dev-only controls on the right edge: the TV's fast-forward ends the trailer, then closes voting as it stands, then moves on; the phone's leave button leaves the session.
 
-Dev-only controls on the right edge: the TV's fast-forward skips to the next step (missing votes count as yes); the phone's leave button forgets this phone's seat. Each browser tab is its own person, so you can test with a few tabs on one laptop.
+**Trailers:** the backend only queues films whose YouTube trailer it has checked, and the TV plays that trailer to the end, then opens voting. `VITE_TMDB_TOKEN` is a fallback lookup by `tmdb_id` (`src/api/tmdb.ts`).
 
-**Real trailers:** put a TMDB API Read Access Token in `frontend/.env.local` as `VITE_TMDB_TOKEN` (see `.env.example`) and restart the dev server. The TV then plays each film's YouTube trailer to the end, looked up from TMDB by `tmdb_id` (`src/api/tmdb.ts`), and voting opens when it finishes. Without a token it shows placeholder art.
-
-Other commands: `npm run build` (type-check + production build), `npm run lint`, `npm run preview` (no fake backend in preview).
+Other commands: `npm run build` (type-check + production build), `npm run lint`, `npm run preview`.
 
 ## How a night flows
 
@@ -45,10 +51,10 @@ Votes stay private: the server never sends how anyone voted, only who has voted 
 
 | Path | What |
 |---|---|
-| `mock-backend/index.ts` | The fake backend: one room, its timers, vote counting, the fake re-ranking and pick ranking. Clients POST actions to `/mock-api/<action>` and listen on `/mock-api/events` (Server-Sent Events). |
-| `src/api/index.ts` | **The only place screens talk to the backend**: `connect()` for live snapshots, `act()` for actions, `movie()` for film details. The real session service should speak the same protocol. |
+| `src/api/index.ts` | **The only place screens talk to the backend**: `connect()` follows the session's WebSocket and builds a `Snapshot`, `act()` maps each screen action to a backend call, `movie()` reads `/session-catalog`. On the TV it also runs the night and publishes the stage. |
+| `src/api/auth.ts` | The bearer token: the backend's dev login (`VITE_DEV_AUTH=1`) or a Google ID token from Google Identity Services. |
 | `src/api/types.ts` | `Snapshot` is what every screen sees; `Rec` matches the Python backend's rec shape. |
-| `src/api/mock.ts` | Films (real `movies.json` rows), placeholder details and art, feelings and the catalog tags each one boosts, fake feed tags. |
+| `src/api/data.ts` | Seat colours, feelings and the catalog tags each one boosts, reactions, generated poster art. |
 | `src/api/tmdb.ts` | Trailer lookup: TMDB's videos for a `tmdb_id`, official YouTube trailer first. |
 | `src/room/` | `RoomProvider` keeps the live snapshot; `useRoom()` reads it. |
 | `src/lib/flow.ts` | Which screen each device should be on for the room's state. |
@@ -59,10 +65,8 @@ Votes stay private: the server never sends how anyone voted, only who has voted 
 
 ## Not wired yet
 
-These come with the real backend (see `docs/decisions.md`): the session service (replacing `mock-backend/`), Google sign-in, uploading screenshots to `POST /feeds` (the phone keeps them locally for now), real group recs from `POST /groups/{id}/recs` with feelings as tag boosts, sending votes to `POST /feedback`, and TMDB posters by `tmdb_id`. Posters are generated placeholder art until then.
+- **Feelings don't steer the picks yet.** They're saved and shown on seats, but the session queue (`backend/session_recommendations.py`) takes no tag boosts.
+- **"Why it's here" and match %** during trailers: the queue doesn't return per-feed reasons or scores. Picks show match % from the final ranking.
+- Posters are generated art; the catalog's `poster_url` isn't used yet.
 
-`.env.example` lists the env vars the wired-up app will need.
-
-## SQLite backend integration
-
-The production session backend is documented in [the unified backend guide](../docs/unified-backend.md). `session-client.js` provides authenticated WebSocket snapshots and heartbeats; it is not yet wired into the app above. Run `node --test frontend/session-client.test.mjs` from the repository root.
+`.env.example` lists the env vars the app needs. `session-client.js` is the backend team's standalone WebSocket helper (`node --test frontend/session-client.test.mjs`); the app uses its own client in `src/api/index.ts`.

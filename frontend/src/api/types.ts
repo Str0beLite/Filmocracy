@@ -1,6 +1,6 @@
 // `Rec` matches the backend's rec shape (backend/README.md, "API").
-// Everything else is what the screens need; when the backend is wired in,
-// `src/api/index.ts` builds these from real responses instead of mock.ts.
+// Everything else is what the screens need; `src/api/index.ts` builds these
+// from the session backend's snapshots and its /session-catalog.
 
 export interface Rec {
   rec_id: number | null;
@@ -14,7 +14,8 @@ export interface Rec {
   explore?: boolean; // one of the backend's exploration picks (ranks 11–50)
 }
 
-// What TMDB will fill in later. Art is placeholder poster/trailer styling.
+// Runtime, genres and logline come from the backend's movie metadata; the
+// palette and motif are generated art for when there's no poster or trailer.
 export interface MovieDetails {
   runtime: string;
   genres: string[];
@@ -29,8 +30,10 @@ export interface Movie extends MovieDetails {
   title: string;
   year: number;
   tags: string[];
-  match: number; // 0–100, for display
+  match: number | null; // 0–100, for display; null until the group's scores are known
   wildcard: boolean;
+  posterUrl: string | null;
+  trailerKey: string | null; // a YouTube id the backend already checked is playable
 }
 
 export type FeelingId = 'laugh' | 'edge' | 'feels' | 'mindblown' | 'cozy' | 'hyped';
@@ -70,6 +73,9 @@ export interface Reaction {
 // (`locked`) and whether it was unanimous (`outcome`).
 export interface Snapshot {
   serverNow: number;
+  joined: boolean; // false on a phone that hasn't joined a session yet
+  invite: string; // TV only: the invitation token behind the QR code
+  roundId: string | null; // the backend's voting round for the current trailer
   code: string;
   name: string;
   people: Person[];

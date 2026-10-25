@@ -23,8 +23,8 @@ function Follow({ children }: { children: ReactNode }) {
 
   // The room was reset (or the server restarted): start this phone over.
   useEffect(() => {
-    if (me && !person) setMe(null);
-  }, [me, person, setMe]);
+    if (s.joined && me && !person) setMe(null);
+  }, [s.joined, me, person, setMe]);
 
   useEffect(() => {
     if (pathname !== want) navigate(want, { replace: true });

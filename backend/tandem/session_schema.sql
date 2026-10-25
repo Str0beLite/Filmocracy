@@ -74,3 +74,19 @@ BEGIN SELECT RAISE(ABORT,'Unknown catalog movie'); END;
 CREATE TRIGGER IF NOT EXISTS tandem_queue_movie_update BEFORE UPDATE OF movie_id ON tandem_queue
 WHEN NOT EXISTS(SELECT 1 FROM tandem_movies WHERE id=NEW.movie_id)
 BEGIN SELECT RAISE(ABORT,'Unknown catalog movie'); END;
+
+INSERT OR IGNORE INTO tandem_schema_versions VALUES (3);
+-- Live-room extras the frontend needs: what the TV is showing (stage, host-written JSON),
+-- each member's feeling for tonight, and short-lived emoji reactions.
+CREATE TABLE IF NOT EXISTS tandem_stage (
+  session_id TEXT PRIMARY KEY REFERENCES tandem_sessions(id), stage TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS tandem_member_state (
+  session_id TEXT NOT NULL REFERENCES tandem_sessions(id), user_id TEXT NOT NULL, feeling TEXT,
+  PRIMARY KEY(session_id, user_id)
+);
+CREATE TABLE IF NOT EXISTS tandem_reactions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL REFERENCES tandem_sessions(id),
+  user_id TEXT NOT NULL, emoji TEXT NOT NULL, created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tandem_reactions_session ON tandem_reactions(session_id, created_at);

@@ -107,6 +107,18 @@ class Control(BaseModel):
     expected_round_id: Optional[UUID] = None
 
 
+class Stage(BaseModel):
+    stage: dict
+
+
+class Feeling(BaseModel):
+    feeling: str = Field(min_length=1, max_length=20)
+
+
+class Reaction(BaseModel):
+    emoji: str = Field(min_length=1, max_length=16)
+
+
 class Feed(BaseModel):
     feed_id: str = Field(min_length=1, max_length=128)
 
@@ -133,8 +145,25 @@ class Profile(BaseModel):
     display_name: Optional[str]
 
 
+class MemberState(BaseModel):
+    user_id: str
+    feeling: Optional[str]
+
+
+class ReactionRecord(BaseModel):
+    id: int
+    user_id: str
+    emoji: str
+    created_at: str
+
+
 class SQLiteSessionState(BaseModel):
     profiles: list[Profile]
+    stage: dict = {}
+    member_state: list[MemberState] = []
+    session_feeds: list[str] = []
+    reactions: list[ReactionRecord] = []
+    server_now: Optional[str] = None
     session: SQLiteGroupSession
     session_members: list[SQLiteMember]
     session_movies: list[SessionMovie]
@@ -201,6 +230,22 @@ def control(sid: UUID, body: Control, request: Request, user=Depends(current_use
     return request.app.state.sessions.control(
         str(sid), user, body.action, str(body.expected_round_id) if body.expected_round_id else None
     )
+
+
+@router.post("/sessions/{sid}/stage")
+def stage(sid: UUID, body: Stage, request: Request, user=Depends(current_user)):
+    """Host only. The TV publishes what it's showing; phones follow it from the snapshot."""
+    return request.app.state.sessions.set_stage(str(sid), user, body.stage)
+
+
+@router.post("/sessions/{sid}/feeling")
+def feeling(sid: UUID, body: Feeling, request: Request, user=Depends(current_user)):
+    return request.app.state.sessions.set_feeling(str(sid), user, body.feeling)
+
+
+@router.post("/sessions/{sid}/react")
+def react(sid: UUID, body: Reaction, request: Request, user=Depends(current_user)):
+    return request.app.state.sessions.react(str(sid), user, body.emoji)
 
 
 @router.post("/sessions/{sid}/feed", response_model=Feed)

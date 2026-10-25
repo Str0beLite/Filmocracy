@@ -2,7 +2,7 @@
 // waits, reacts and votes, and follows the big screen through the night.
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import {
   ArrowRight,
   Check,
@@ -20,7 +20,8 @@ import {
   X,
 } from 'lucide-react';
 import { EMOTES, FEELINGS, act, movie, type Snapshot } from '../api';
-import { Avatar, Confetti, LivePill, PickSource, Poster, Seat, Wildcard, Wordmark } from '../components/ui';
+import { DEV_AUTH, googleName, onSignIn, renderGoogleButton } from '../api/auth';
+import { Avatar, Confetti, LivePill, PickSource, Poster, Wildcard, Wordmark } from '../components/ui';
 import { FEELING_ICONS } from '../lib/feelings';
 import { trailerProgress } from '../lib/night';
 import { gsap, useElapsed, useMotion } from '../lib/motion';
@@ -54,34 +55,30 @@ function WaitingNote({ children }: { children: string }) {
 
 // ---- Onboarding ----
 
+// The QR link carries the session's invitation in its fragment. Keep it for
+// the join call after sign-in, and drop it from the address bar.
+function useInvite() {
+  const [invite] = useState(() => {
+    const fromLink = new URLSearchParams(location.hash.slice(1)).get('invite');
+    if (fromLink) {
+      sessionStorage.setItem('tandem.phone.invite', fromLink);
+      history.replaceState(null, '', location.pathname);
+    }
+    return fromLink ?? sessionStorage.getItem('tandem.phone.invite');
+  });
+  return invite;
+}
+
 export function PhoneJoin() {
-  const { s } = useRoom();
-  const [params] = useSearchParams();
-  const navigate = useNavigate();
-  const scanned = params.get('room')?.toUpperCase() === s.code;
-  const [code, setCode] = useState('');
-  const [wrong, setWrong] = useState(false);
+  const invite = useInvite();
   return (
     <section className="ps">
       <header className="ps-top">
         <Wordmark />
       </header>
-      <div className="join-hero" aria-hidden="true">
-        <div className="seat-row">
-          {s.people.slice(0, 6).map((p) => (
-            <Seat key={p.id} person={p} />
-          ))}
-        </div>
-      </div>
-      {scanned ? (
+      {invite ? (
         <>
           <h1 className="ps-title display">You’re invited to movie night.</h1>
-          <div className="join-room">
-            <b>{s.name}</b>
-            <span>
-              Room {s.code} · {seatedOf(s).length ? `${seatedOf(s).length} already seated` : 'on the big screen'}
-            </span>
-          </div>
           <div className="ps-foot">
             <Link className="btn btn-primary" to="/phone/sign-in">
               Join the room <ArrowRight aria-hidden="true" />
@@ -89,44 +86,10 @@ export function PhoneJoin() {
           </div>
         </>
       ) : (
-        <form
-          style={{ display: 'contents' }}
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (code.toUpperCase() === s.code) navigate('/phone/sign-in');
-            else setWrong(true);
-          }}
-        >
+        <>
           <h1 className="ps-title display">Join movie night</h1>
-          <p className="ps-sub">Scan the code on the big screen, or type the room code under it.</p>
-          <label className="field">
-            Room code
-            <input
-              value={code}
-              onChange={(e) => {
-                setCode(e.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 4));
-                setWrong(false);
-              }}
-              placeholder="K7Q2…"
-              autoComplete="off"
-              autoCapitalize="characters"
-              spellCheck={false}
-              name="room"
-              aria-invalid={wrong}
-              aria-describedby={wrong ? 'code-error' : undefined}
-            />
-          </label>
-          {wrong && (
-            <p className="field-error" id="code-error" role="alert">
-              No room with that code. Check the code under the QR on the big screen.
-            </p>
-          )}
-          <div className="ps-foot">
-            <button className="btn btn-primary" disabled={code.length !== 4}>
-              Join the room <ArrowRight aria-hidden="true" />
-            </button>
-          </div>
-        </form>
+          <p className="ps-sub">Scan the QR code on the big screen with your phone’s camera.</p>
+        </>
       )}
     </section>
   );
@@ -163,20 +126,45 @@ export function PhoneSignIn() {
         </li>
       </ul>
       <div className="ps-foot">
-        {/* Real Google sign-in comes with the backend; for now it asks for a name. */}
-        <Link className="btn btn-google" to="/phone/name">
-          <GoogleG /> Sign in with Google
-        </Link>
+        {DEV_AUTH ? (
+          // Local dev: the backend's dev login, so any name will do.
+          <Link className="btn btn-google" to="/phone/name">
+            <GoogleG /> Sign in with Google
+          </Link>
+        ) : (
+          <GoogleButton />
+        )}
       </div>
     </section>
   );
 }
 
-// Stand-in for Google sign-in (the backend's dev login is just a name).
+function GoogleButton() {
+  const navigate = useNavigate();
+  const el = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    const off = onSignIn(() => navigate('/phone/name'));
+    if (el.current) renderGoogleButton(el.current).catch(() => setError('Google sign-in didn’t load. Check your connection and try again.'));
+    return off;
+  }, [navigate]);
+  return (
+    <>
+      <div ref={el} className="google-button" />
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+// Your seat's name. Joins the session behind the QR code.
 export function PhoneName() {
   const { me, setMe } = usePhone();
   const navigate = useNavigate();
-  const [name, setName] = useState('');
+  const [name, setName] = useState(googleName);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return (
@@ -192,8 +180,12 @@ export function PhoneName() {
             const { id } = await act<{ id: string }>('join', { name });
             setMe(id);
             navigate('/phone/feeling');
-          } catch {
-            setError('Couldn’t reach the big screen. Check you’re on the same Wi-Fi, then try again.');
+          } catch (err) {
+            setError(
+              err instanceof Error && /invitation|ended/i.test(err.message)
+                ? 'That room has closed. Scan the QR code on the big screen again.'
+                : 'Couldn’t reach the big screen. Check you’re on the same Wi-Fi, then try again.',
+            );
           } finally {
             setBusy(false);
           }
@@ -264,18 +256,21 @@ export function PhoneFeeling() {
   );
 }
 
-const SHOTS_NEEDED = 3;
+// One Explore screenshot is enough; each extra one (up to 3) steadies the picks,
+// since a single page can lean hard one way.
+const MAX_SHOTS = 3;
 
 export function PhoneScreenshots() {
   const { shots, setShots } = usePhone();
   const input = useRef<HTMLInputElement>(null);
-  const done = shots.length >= SHOTS_NEEDED;
+  const full = shots.length >= MAX_SHOTS;
 
   const add = (e: ChangeEvent<HTMLInputElement>) => {
     const urls = [...(e.target.files ?? [])].map((f) => URL.createObjectURL(f));
-    setShots([...shots, ...urls].slice(-SHOTS_NEEDED));
+    setShots([...shots, ...urls].slice(-MAX_SHOTS));
     e.target.value = '';
   };
+  const pick = () => input.current?.click();
 
   return (
     <section className="ps">
@@ -283,43 +278,52 @@ export function PhoneScreenshots() {
       <h1 className="ps-title display">Show us your Explore page.</h1>
       <ol className="howto-shots">
         <li>Open Instagram and tap the search tab.</li>
-        <li>Scroll a little, then take a screenshot.</li>
-        <li>Do that 3 times, then add them here.</li>
+        <li>Take a screenshot and add it here.</li>
+        <li>Optional: scroll and add up to 2 more for sharper picks.</li>
       </ol>
       <div className="shots">
-        {Array.from({ length: SHOTS_NEEDED }, (_, i) => (
+        {Array.from({ length: MAX_SHOTS }, (_, i) => (
           <div key={i} className={`shot-slot ${shots[i] ? 'is-filled' : ''} ${i === shots.length ? 'is-next' : ''}`}>
             {shots[i] ? (
               <img src={shots[i]} alt={`Screenshot ${i + 1}`} width={90} height={160} />
             ) : (
-              <ImagePlus aria-hidden="true" />
+              <>
+                <ImagePlus aria-hidden="true" />
+                {i > 0 && <small>Optional</small>}
+              </>
             )}
           </div>
         ))}
       </div>
       <div className="ps-foot">
-        {done ? (
-          <Link className="btn btn-primary" to="/phone/reading">
-            Read my feed <ArrowRight aria-hidden="true" />
-          </Link>
-        ) : (
+        <input
+          ref={input}
+          id="shots"
+          className="file-input"
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={add}
+          tabIndex={-1}
+          aria-hidden="true"
+        />
+        {shots.length ? (
           <>
-            <input
-              ref={input}
-              id="shots"
-              className="file-input"
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={add}
-              tabIndex={-1}
-              aria-hidden="true"
-            />
-            <button className="btn btn-primary" onClick={() => input.current?.click()}>
-              <ImagePlus aria-hidden="true" />
-              {shots.length ? `Add ${SHOTS_NEEDED - shots.length} more` : 'Add screenshots'}
-            </button>
+            <Link className="btn btn-primary" to="/phone/reading">
+              Read my feed <ArrowRight aria-hidden="true" />
+            </Link>
+            {!full && (
+              <button className="btn btn-ghost" onClick={pick}>
+                <ImagePlus aria-hidden="true" />
+                Add another for sharper picks
+              </button>
+            )}
           </>
+        ) : (
+          <button className="btn btn-primary" onClick={pick}>
+            <ImagePlus aria-hidden="true" />
+            Add a screenshot
+          </button>
         )}
         <p className="fineprint">Tandem only reads the tiles in your screenshots. It never sees your account.</p>
       </div>
@@ -330,28 +334,62 @@ export function PhoneScreenshots() {
 const READ_MS = 5200;
 
 export function PhoneReading() {
-  const { me, shots } = usePhone();
+  const { shots } = usePhone();
   const [tags, setTags] = useState<string[]>([]);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const elapsed = useElapsed(150);
   const shown = tags.filter((_, i) => elapsed > 700 + i * 650);
   const finished = tags.length > 0 && shown.length === tags.length;
 
+  // Muse reads every tile of every screenshot, which can take a while. Once the
+  // tags are in and have had a moment on screen, take the seat; the room takes it from here.
   useEffect(() => {
     let live = true;
-    act<{ tags: string[] }>('feed', { id: me }).then((r) => live && setTags(r.tags));
-    const t = setTimeout(() => act('seat', { id: me }), READ_MS); // the room takes it from here
+    let t: ReturnType<typeof setTimeout>;
+    const began = Date.now();
+    act<{ tags: string[] }>('feed', { shots })
+      .then((r) => {
+        if (!live) return;
+        setTags(r.tags);
+        t = setTimeout(() => act('seat').catch(() => live && setError(true)), Math.max(READ_MS - (Date.now() - began), 2500));
+      })
+      .catch(() => live && setError(true));
     return () => {
       live = false;
       clearTimeout(t);
     };
-  }, [me]);
+  }, [shots, attempt]);
+
+  if (error) {
+    return (
+      <section className="ps ps--center">
+        <h1 className="ps-title display">Couldn’t read your feed.</h1>
+        <p className="ps-sub">Check your connection, then try again. Or pick different screenshots.</p>
+        <div className="ps-foot">
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setError(false);
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Try again
+          </button>
+          <Link className="btn btn-ghost" to="/phone/screenshots">
+            Pick other screenshots
+          </Link>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="ps ps--center">
       <div className="reading-shots" aria-hidden="true">
-        {Array.from({ length: SHOTS_NEEDED }, (_, i) => (
-          <div key={i} className="reading-shot">
-            {shots[i] && <img src={shots[i]} alt="" width={74} height={132} />}
+        {shots.map((src) => (
+          <div key={src} className="reading-shot">
+            <img src={src} alt="" width={74} height={132} />
           </div>
         ))}
       </div>
@@ -454,14 +492,12 @@ export function PhoneReact() {
           </div>
         </div>
       </div>
-      <h1 className="label">React on the big screen</h1>
-      <div className="emote-grid">
+      <h1 className="ps-title display vote-q">Watch it tonight?</h1>
+      <VoteButtons />
+      <div className="emote-row" role="group" aria-label="React on the big screen">
         {EMOTES.map((e, i) => (
           <button key={e.emoji} className="emote" onClick={() => send(i)} aria-label={`React: ${e.label}`}>
-            <span className="emote-emoji" aria-hidden="true">
-              {e.emoji}
-            </span>
-            <small>{e.label}</small>
+            <span aria-hidden="true">{e.emoji}</span>
             {bursts
               .filter((b) => b.idx === i)
               .map((b) => (
@@ -472,23 +508,38 @@ export function PhoneReact() {
           </button>
         ))}
       </div>
-      <div className="ps-foot">
-        <WaitingNote>Voting opens when the trailer ends</WaitingNote>
-      </div>
     </section>
   );
 }
 
-export function PhoneVote() {
+// I'm in / Pass. Phones can vote during the trailer too: once every seat has
+// voted, the backend closes the round and the TV cuts the trailer short.
+function VoteButtons() {
   const { s } = useRoom();
   const { me, setMyVote } = usePhone();
   const [sent, setSent] = useState(false);
-  const film = movie(s.movieId!);
   const vote = (v: 'yes' | 'no') => {
     setSent(true);
     setMyVote(s.round, v);
     act('vote', { id: me, vote: v }).catch(() => setSent(false));
   };
+  return (
+    <div className="vote-buttons">
+      <button className="vote-btn vote-btn--yes" onClick={() => vote('yes')} disabled={sent}>
+        <Check aria-hidden="true" strokeWidth={3} />
+        I’m in
+      </button>
+      <button className="vote-btn vote-btn--no" onClick={() => vote('no')} disabled={sent}>
+        <X aria-hidden="true" strokeWidth={3} />
+        Pass
+      </button>
+    </div>
+  );
+}
+
+export function PhoneVote() {
+  const { s } = useRoom();
+  const film = movie(s.movieId!);
   return (
     <section className="ps">
       <div className="vote-head">
@@ -501,16 +552,7 @@ export function PhoneVote() {
         </div>
       </div>
       <h1 className="ps-title display vote-q">Watch it tonight?</h1>
-      <div className="vote-buttons">
-        <button className="vote-btn vote-btn--yes" onClick={() => vote('yes')} disabled={sent}>
-          <Check aria-hidden="true" strokeWidth={3} />
-          I’m in
-        </button>
-        <button className="vote-btn vote-btn--no" onClick={() => vote('no')} disabled={sent}>
-          <X aria-hidden="true" strokeWidth={3} />
-          Pass
-        </button>
-      </div>
+      <VoteButtons />
       <p className="fineprint">Your vote stays private. Everyone has to say yes for the golden buzzer.</p>
     </section>
   );
@@ -541,7 +583,7 @@ export function PhoneVoted() {
         })}
       </div>
       <div className="ps-foot">
-        <WaitingNote>{s.phase === 'vote' && left ? `Waiting on ${left} more` : 'The verdict is on the big screen'}</WaitingNote>
+        <WaitingNote>{(s.phase === 'vote' || s.phase === 'trailer') && left ? `Waiting on ${left} more` : 'The verdict is on the big screen'}</WaitingNote>
       </div>
     </section>
   );
@@ -638,7 +680,7 @@ export function PhonePicks() {
               return (
                 <li key={id}>
                   <span>{film.title}</span>
-                  {film.wildcard ? <Wildcard /> : <b>{film.match}%</b>}
+                  {film.wildcard ? <Wildcard /> : film.match !== null && <b>{film.match}%</b>}
                 </li>
               );
             })}

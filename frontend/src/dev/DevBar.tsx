@@ -1,6 +1,6 @@
-// Dev-only controls on the right edge. TV: fast-forward the night (fills in
-// missing votes with yes). Phone: leave the room to join again as someone
-// new. Hidden in production builds.
+// Dev-only controls on the right edge. TV: fast-forward the night (ends the
+// trailer, then closes voting as it stands). Phone: leave the room. Hidden in
+// production builds.
 
 import { Link } from 'react-router';
 import { FastForward, LayoutGrid, LogOut } from 'lucide-react';
@@ -10,7 +10,11 @@ import { usePhone } from '../phone/usePhone';
 function LeaveButton() {
   const { setMe } = usePhone();
   return (
-    <button onClick={() => setMe(null)} aria-label="Leave the room on this phone" title="Leave the room">
+    <button
+      onClick={() => act('leave').finally(() => setMe(null))}
+      aria-label="Leave the room on this phone"
+      title="Leave the room"
+    >
       <LogOut aria-hidden="true" />
     </button>
   );

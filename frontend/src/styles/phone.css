@@ -390,6 +390,13 @@
   height: 26px;
 }
 
+.shot-slot small {
+  position: absolute;
+  bottom: 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
 .shot-slot img {
   position: absolute;
   inset: 0;
@@ -611,23 +618,23 @@
   background: var(--accent);
 }
 
-.emote-grid {
+/* Reactions are secondary to the vote: one small row under it. */
+.emote-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
 }
 
 .emote {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  min-height: 44px;
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: 14px;
   background: var(--surface);
+  font-size: 22px;
+  line-height: 1;
   transition:
     scale 0.12s var(--ease-out),
     background-color 0.2s;
@@ -636,17 +643,6 @@
 .emote:active {
   scale: 0.9;
   background: var(--surface-2);
-}
-
-.emote-emoji {
-  font-size: 36px;
-  line-height: 1;
-}
-
-.emote small {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--muted);
 }
 
 .burst {
@@ -694,6 +690,12 @@
   gap: 12px;
   min-height: 300px;
   margin-bottom: 16px;
+}
+
+.vote-btn {
+  min-height: 72px;
+  flex-direction: row;
+  font-size: 17px;
 }
 
 .vote-btn {

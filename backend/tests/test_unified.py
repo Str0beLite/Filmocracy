@@ -553,3 +553,27 @@ def test_websocket_votes_reconnection_and_access_control(setup, monkeypatch):
             with pytest.raises(WebSocketDisconnect) as closed:
                 ws.receive_json()
             assert closed.value.code == 4403
+
+
+def test_live_room_stage_feelings_and_reactions(setup):
+    factory, _, clock = setup
+    with TestClient(factory()) as c:
+        made = lobby(c)
+        sid = made["session_id"]
+        stage = {"phase": "trailer", "round": 1, "pausedAt": None}
+        assert post(c, f"/sessions/{sid}/stage", json={"stage": stage}).status_code == 200
+        assert post(c, f"/sessions/{sid}/stage", "a", json={"stage": {}}).status_code == 403
+        assert post(c, f"/sessions/{sid}/stage", "outsider", json={"stage": {}}).status_code == 404
+        big = {"x": "y" * 20000}
+        assert post(c, f"/sessions/{sid}/stage", json={"stage": big}).status_code == 413
+        assert post(c, f"/sessions/{sid}/feeling", "a", json={"feeling": "laugh"}).status_code == 200
+        assert post(c, f"/sessions/{sid}/react", "b", json={"emoji": "🔥"}).status_code == 200
+        assert post(c, f"/sessions/{sid}/react", "outsider", json={"emoji": "🔥"}).status_code == 404
+        state = get(c, f"/sessions/{sid}", "c").json()
+        assert state["stage"] == stage
+        assert state["member_state"] == [{"user_id": "a", "feeling": "laugh"}]
+        assert sorted(state["session_feeds"]) == ["a", "b", "c"]
+        assert [(r["user_id"], r["emoji"]) for r in state["reactions"]] == [("b", "🔥")]
+        assert state["server_now"]
+        clock.now += 60   # reactions are short-lived
+        assert get(c, f"/sessions/{sid}", "c").json()["reactions"] == []
