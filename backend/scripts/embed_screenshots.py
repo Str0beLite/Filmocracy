@@ -13,8 +13,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from tandem import vision  # noqa: E402
-from tandem.encoder import bag  # noqa: E402
+from tandem import vision
+from tandem.encoder import bag
 
 
 def main(paths):

@@ -2,8 +2,6 @@
 
 **Movie night picks from your group's Instagram feeds.** Everyone uploads a few screenshots of their feed once, joins the host's screen with a QR code, and Tandem serves trailers the whole group will want to watch. You never rate a single movie: your feed already says what your taste is.
 
-The session backend (Supabase) is described in [docs/backend-handoff.md](docs/backend-handoff.md); run instructions for both backend services are in [backend/README.md](backend/README.md).
-
 Under the hood is a small learned matrix **W** that translates "Instagram taste" into "film taste". It starts as a zero-shot guess and gets better with every 👍 and 👎, live, while the app is running.
 
 ## How it works

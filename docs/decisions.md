@@ -15,9 +15,4 @@ One line each: date, decision, why.
 - 2026-10-24: Google sign-in required; backend verifies the GIS ID token (`google-auth`) and uses `sub` as the user id. `TANDEM_DEV_AUTH=1` bypass for local dev only.
 - 2026-10-24: Catalog = top 5000 MovieLens 25M films with tag-genome scores, committed. Posters/trailers come from TMDB on the fly in the frontend by `tmdb_id`, not baked into the catalog.
 - 2026-10-24: Frontend on Vercel (`VITE_API_URL` → Railway domain).
-- 2026-10-24: Supabase Auth/Postgres/Realtime with FastAPI via caller-JWT REST/RPC; keep authorization in database and server secrets out of clients.
-- 2026-10-24: UUID voting rounds and session-row locks serialize votes, skips, and sweeps; derive current round instead of circular foreign keys.
-- 2026-10-24: Snapshot electorate with 45-second heartbeat leases and a 10-second backend sweep; TV host does not vote by default.
-- 2026-10-24: Store SHA-256 hashes of rotating random QR invitation tokens in private schema; defer embeddings and use only a mock recommendation provider.
-- 2026-10-24: Use existing tandem for authorized hackathon live tests with generated fixture namespaces and scoped cleanup; disable the global sweep during tests.
-- 2026-10-24: Export typed FastAPI OpenAPI and test the real Realtime wire protocol; defer TMDB writes until source/destination approval and keep inserts conflict-ignoring.
+- 2026-10-24: Dropped the first Supabase session service (app.py, sessions/rounds/votes RPCs) in favour of the algorithm service; Supabase stays and will be rewritten around the algorithm's API. Its applied migrations stay in `supabase/migrations/` so `supabase db push` history matches the live project.
