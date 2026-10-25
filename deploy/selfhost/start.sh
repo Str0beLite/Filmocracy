@@ -13,7 +13,9 @@ if systemctl --user is-active -q filmocracy-api filmocracy-tunnel filmocracy-dep
   exit 1
 fi
 
-trap 'trap - EXIT INT TERM; kill 0' EXIT INT TERM   # take the other process down with whichever stops first
+pidfile=$HOME/.local/state/filmocracy-start.pid   # lets stop.sh find this terminal
+mkdir -p "${pidfile%/*}" && echo $$ > "$pidfile"
+trap 'trap - EXIT INT TERM; rm -f "$pidfile"; kill 0' EXIT INT TERM   # take the other process down with whichever stops first
 echo "serving $dir"
 "$cloudflared" tunnel run filmocracy 2>&1 | sed -u 's/^/[tunnel] /' &
 "$venv/bin/uvicorn" unified:app --app-dir "$dir/backend" --env-file "$HOME/.config/filmocracy/backend.env" \

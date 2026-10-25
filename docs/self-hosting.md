@@ -81,6 +81,7 @@ To see the API and tunnel live in one terminal instead of running them as servic
 systemctl --user stop filmocracy-deploy.timer filmocracy-api filmocracy-tunnel   # free port 8000
 deploy/selfhost/start.sh                  # API + tunnel, logs tagged [api] / [tunnel]; Ctrl+C stops both
 deploy/selfhost/update.sh                 # pull the latest main into ~/filmocracy-live, then restart start.sh
+deploy/selfhost/stop.sh                   # stop everything: the services and/or a start.sh terminal
 ```
 
 - `start.sh` refuses to run while the services are up.
