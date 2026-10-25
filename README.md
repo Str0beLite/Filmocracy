@@ -1,6 +1,6 @@
 # Tandem
 
-**Movie recommendations from your Instagram feed.** Upload a few screenshots of your feed, and Tandem tells you which films you'll love. You never rate a single movie: your feed already says what your taste is.
+**Movie night picks from your group's Instagram feeds.** Everyone uploads a few screenshots of their feed once, joins the host's screen with a QR code, and Tandem serves trailers the whole group will want to watch. You never rate a single movie: your feed already says what your taste is.
 
 Under the hood is a small learned matrix **W** that translates "Instagram taste" into "film taste". It starts as a zero-shot guess and gets better with every 👍 and 👎, live, while the app is running.
 
@@ -44,20 +44,13 @@ cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
-
-# 1. Build the movie catalog once (MovieLens tag genome, or any movie_id,title,tag,weight CSV)
-python scripts/build_catalog.py --genome-dir ~/Downloads/ml-32m --top 5000
-
-# 2. Run
-export LLAMA_API_KEY=...          # Meta Llama API key, for screenshots
-uvicorn tandem.api:app --reload
-
-# 3. Try it (no key needed when you pass tags directly)
-curl -F 'tags={"dark humor":1,"neon night drives":0.7,"gym rat":0.4}' localhost:8000/feeds
-curl localhost:8000/feeds/<feed_id>/recs
+cp .env.example .env              # fill in keys; TANDEM_DEV_AUTH=1 lets you skip Google locally
+uvicorn tandem.api:app --reload --env-file .env
 ```
 
-Tests: `cd backend && pytest -q`. They use a fake encoder and a synthetic catalog, so they need no keys and no downloads.
+The movie catalog (5000 MovieLens films) is already committed. Keys, the group API, curl examples and the Railway deploy are in **[backend/README.md](backend/README.md)**.
+
+Tests: `cd backend && TANDEM_FAKE_ENCODER=1 pytest -q`. They use a fake encoder and a synthetic catalog, so they need no keys and no downloads.
 
 ## Stack
 

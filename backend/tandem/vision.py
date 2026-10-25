@@ -46,7 +46,7 @@ MAX_TAGS = 20
 
 def parse_reply(text):
     """Tolerant parse: strip code fences, tidy tag strings, clamp weights. Returns (is_noise, {tag: w})."""
-    text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip()
+    text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
     data = json.loads(text[text.find("{"): text.rfind("}") + 1])
     tags = {}
     for t in data.get("tags", [])[:MAX_TAGS]:

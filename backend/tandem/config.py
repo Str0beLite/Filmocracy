@@ -47,3 +47,10 @@ EXPLORE_RANKS = (10, 50)   # exploration picks come from ranks 11–50
 
 POSITIVE_LABELS = {"love", "seen_loved", "favourite"}
 NEGATIVE_LABELS = {"nah"}
+TAG_BOOST = _env("TANDEM_TAG_BOOST", 0.15, float)   # added to films carrying any tag the host asked to boost
+
+# Auth: Google ID tokens must be issued for this OAuth client. Admin endpoints need X-Admin-Token.
+GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID", "")
+ADMIN_TOKEN = _env("TANDEM_ADMIN_TOKEN", "")
+# Local dev only: `Bearer <name>` signs in as <name> with no Google check. Never set this in production.
+DEV_AUTH = _env("TANDEM_DEV_AUTH", "0") == "1"

@@ -14,18 +14,18 @@ weighted mean of its tags' embeddings. Writes catalog/movies.json and catalog/mo
 """
 import argparse
 import csv
+import json
 import math
 import re
 import sys
-import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from tandem import config  # noqa: E402
-from tandem.encoder import embed, unit  # noqa: E402
+from tandem import config
+from tandem.encoder import embed, unit
 
 
 def load_genome(d, top, k):

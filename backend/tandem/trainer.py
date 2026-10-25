@@ -57,7 +57,7 @@ class Trainer:
                 break
             try:
                 self.retrain()
-            except Exception as e:  # never let a bad round kill serving
+            except Exception as e:  # noqa: BLE001 - never let a bad round kill serving
                 print(f"[trainer] retrain failed: {e!r}")
 
     # data
