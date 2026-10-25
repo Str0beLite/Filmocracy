@@ -657,7 +657,7 @@ def test_each_members_feeling_boosts_group_scores(setup):
         cat.movies[0]['tags']['comedy'] = 1.0
         feed = store.get_feed(fid)
         _, model = integration.state['trainer'].current()
-        base = score_feed(model, feed['x'], cat.vecs, cat.prior)
+        base = score_feed(model, feed['x'], cat.vecs, cat.prior, recency=cat.recency)
         expected = boost(base, cat.movies, ['comedy', 'funny', 'hilarious'])
         assert np.allclose(integration.scores([(feed, 'laugh')]), expected)
         assert np.allclose(integration.scores([(feed, None)]), base)

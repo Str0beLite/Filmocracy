@@ -10,9 +10,10 @@ from .encoder import embed
 
 
 @torch.no_grad()
-def score_feed(model, x, movie_vecs, prior=None, pos=(), neg=()):
+def score_feed(model, x, movie_vecs, prior=None, pos=(), neg=(), recency=None):
     """Score every film for one feed. pos/neg are the films voted on so far: they pull the predicted taste toward the
-    loves and away from the passes right away, so the next rec reacts to votes before W retrains."""
+    loves and away from the passes right away, so the next rec reacts to votes before W retrains. recency (catalog.recency)
+    adds config.RECENCY_WEIGHT for the newest films, scaled down to 0 for the oldest."""
     vecs = torch.from_numpy(movie_vecs)
     y = model(torch.from_numpy(x.copy()))
     if pos or neg:
@@ -22,7 +23,8 @@ def score_feed(model, x, movie_vecs, prior=None, pos=(), neg=()):
         if neg:
             d -= 0.5 * vecs[sorted(neg)].mean(0)
         y = F.normalize(y + config.VOTE_PULL * min(len(pos) + len(neg), 10) * d, dim=-1)
-    return (y @ vecs.T + model.pop_term(None if prior is None else torch.from_numpy(prior))).numpy()
+    s = (y @ vecs.T + model.pop_term(None if prior is None else torch.from_numpy(prior))).numpy()
+    return s if recency is None else s + config.RECENCY_WEIGHT * recency
 
 
 @torch.no_grad()

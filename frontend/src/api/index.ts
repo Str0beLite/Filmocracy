@@ -9,6 +9,7 @@
 
 import { device, token } from './auth';
 import { API, ApiError, http } from './http';
+import { formatRuntime, tmdbDetails } from './tmdb';
 import { COLORS, EMOTES, FEELINGS, art } from './data';
 import { MISS_MS, TRAILER_GRACE_MS, TRAILER_MS, VOTE_TIMEOUT_MS } from './rules';
 import type { Movie, Outcome, Phase, PickSource, Reaction, Snapshot } from './types';
@@ -35,7 +36,6 @@ interface CatalogRow {
 const movies = new Map<number, Movie>();
 let catalog: Promise<void> | null = null;
 
-const runtime = (min?: number) => (min ? `${Math.floor(min / 60)}h ${min % 60}m`.replace(' 0m', '').replace(/^0h /, '') : '');
 
 function youtubeId(url?: string) {
   try {
@@ -56,7 +56,7 @@ function toMovie(r: CatalogRow): Movie {
     wildcard: false,
     posterUrl: r.poster_url ?? null,
     trailerKey: youtubeId(r.trailer_url),
-    runtime: runtime(r.runtime_minutes),
+    runtime: formatRuntime(r.runtime_minutes),
     genres: r.genres ?? [],
     logline: r.overview ?? '',
     ...art(r.id),
@@ -237,28 +237,51 @@ function toSnapshot(st: BackendState, sg: Stage): Snapshot {
   };
 }
 
-// Never show a film before its details are in: if the backend queued one this page hasn't loaded
-// (it was redeployed with a bigger catalog), fetch the catalog again, then show the newest state.
+// Never show a film before its details are in. If the backend queued one this page hasn't loaded (it was
+// redeployed with a bigger catalog), fetch the catalog again. If a queued film has no stored details (title,
+// poster, runtime, genres, summary), get them from TMDB first. Then show the newest state.
 let latest: BackendState | null = null;
-let refetching = false;
-const refetched = new Set<number>(); // ids we already refetched for, so an unknown id can't loop
+let waiting = false;
+const tried = new Set<number>(); // ids we already fetched for, so a film nobody knows can't loop
+const DETAILS_WAIT_MS = 4000; // past this, show the state anyway; details fill in when they arrive
+
+async function fillDetails(ids: number[]) {
+  await Promise.all(
+    ids.map(async (id) => {
+      const m = movies.get(id);
+      if (!m) return;
+      const d = await tmdbDetails(m.tmdbId);
+      movies.set(id, {
+        ...m,
+        title: d.title || m.title, // TMDB's title over MovieLens's "Illusionist, The"
+        posterUrl: d.poster,
+        trailerKey: d.trailer,
+        runtime: d.runtime,
+        genres: d.genres,
+        logline: d.logline,
+      });
+    }),
+  );
+  if (state) emit(toSnapshot(state, stage));
+}
+
 function onState(st: BackendState) {
   latest = st;
-  if (refetching) return;
-  const missing = st.session_movies.map((m) => m.movie_id).filter((id) => !movies.has(id) && !refetched.has(id));
-  if (missing.length) {
-    missing.forEach((id) => refetched.add(id));
-    refetching = true;
-    catalog = null;
-    void loadCatalog()
-      .catch(() => {})
-      .finally(() => {
-        refetching = false;
-        onState(latest!);
-      });
-    return;
-  }
-  applyState(st);
+  if (waiting) return;
+  const ids = st.session_movies.map((m) => m.movie_id).filter((id) => !tried.has(id));
+  const unknown = ids.filter((id) => !movies.has(id));
+  const bare = ids.filter((id) => movies.has(id) && !movies.get(id)!.posterUrl && !movies.get(id)!.logline);
+  if (!unknown.length && !bare.length) return applyState(st);
+  waiting = true;
+  ids.forEach((id) => tried.add(id));
+  const ready = unknown.length
+    ? ((catalog = null), loadCatalog().catch(() => {}))
+    : Promise.race([fillDetails(bare), new Promise((r) => setTimeout(r, DETAILS_WAIT_MS))]);
+  void ready.finally(() => {
+    waiting = false;
+    if (unknown.length) unknown.forEach((id) => tried.delete(id)); // look again now the catalog is in, for details
+    onState(latest!);
+  });
 }
 
 function applyState(st: BackendState) {

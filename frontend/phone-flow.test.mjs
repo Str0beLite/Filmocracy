@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import test from 'node:test';
+import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
+const require = createRequire(import.meta.url);
 import ts from 'typescript';
 
 // Load the real browser modules with Vite's environment replaced for Node.
@@ -13,7 +16,9 @@ async function browserModule(path, cache = new Map()) {
   }).outputText.replaceAll('import.meta.env', '{}');
   const imports = [...source.matchAll(/from ['"](.+?)['"]/g)];
   for (const [, name] of imports) {
-    const url = await browserModule(resolve(dirname(path), `${name}.ts`), cache);
+    const url = name.startsWith('.')
+      ? await browserModule(resolve(dirname(path), `${name}.ts`), cache)
+      : pathToFileURL(require.resolve(name)).href;
     source = source.replaceAll(`'${name}'`, `'${url}'`).replaceAll(`"${name}"`, `"${url}"`);
   }
   const url = `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;

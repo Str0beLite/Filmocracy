@@ -342,3 +342,29 @@ def test_pick_samples_with_temperature(monkeypatch):
     runs = [[it["idx"] for it in pick(s, exclude={0}, rng=random.Random(k))] for k in range(20)]
     assert all(0 not in r and len(set(r)) == config.N_RECS for r in runs)
     assert len({tuple(r) for r in runs}) == 20 and max(max(r) for r in runs) > 3 * config.N_RECS
+
+
+def test_recency_lifts_newer_films(monkeypatch):
+    from tandem.catalog import Catalog
+    from tandem.encoder import bag
+    from tandem.model import Translator
+    from tandem.recommend import score_feed
+
+    movies = [{"id": i, "title": f"M{i}", "year": y, "tags": {"same": 1}} for i, y in enumerate(["1950", "2019", None])]
+    cat = Catalog(movies, np.stack([bag(m["tags"]) for m in movies]))
+    assert np.allclose(cat.recency, [0.0, 1.0, 0.5**5])
+    model = Translator(cat.w0).eval()
+    monkeypatch.setattr(config, "RECENCY_WEIGHT", 0.4)
+    s = score_feed(model, cat.feed_vector({"same": 1}), cat.vecs, recency=cat.recency)
+    assert np.allclose(s - score_feed(model, cat.feed_vector({"same": 1}), cat.vecs), [0, 0.4, 0.4 * 0.5**5])
+
+
+def test_clean_title_reads_like_people_say_it():
+    from scripts.build_catalog import clean_title
+
+    assert clean_title("Illusionist, The (L'illusionniste)") == "The Illusionist"
+    assert clean_title("Léon: The Professional (a.k.a. The Professional) (Léon)") == "Léon: The Professional"
+    assert clean_title("Lord of the Rings: The Two Towers, The") == "The Lord of the Rings: The Two Towers"
+    assert clean_title("Lord of the Rings, The: The Return of the King") == "The Lord of the Rings: The Return of the King"
+    assert clean_title("Homme qui aimait les femmes, L'") == "L'Homme qui aimait les femmes"
+    assert clean_title("(500) Days of Summer") == "(500) Days of Summer"

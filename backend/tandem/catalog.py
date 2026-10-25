@@ -23,6 +23,13 @@ class Catalog:
         # Popularity prior: squared rank percentile of rating count (ties share the lower rank; no counts -> all 0).
         counts = np.array([m.get("popularity", 0) for m in self.movies])
         self.prior = (np.searchsorted(np.sort(counts), counts) / max(len(counts) - 1, 1)).astype(np.float32) ** 2
+        # Recency: release-year rank percentile to the 5th power, 0 = oldest, 1 = newest (films without a year count as
+        # mid-catalog). The power makes it rise steeply at the end: only ~8% of the catalog is from 2015-2019.
+        years = np.array([int(m["year"]) if str(m.get("year") or "").isdigit() else 0 for m in self.movies])
+        known = np.sort(years[years > 0])
+        self.recency = np.where(
+            years > 0, np.searchsorted(known, years) / max(len(known) - 1, 1), 0.5
+        ).astype(np.float32) ** 5
 
     @classmethod
     def load(cls, path=None):

@@ -71,7 +71,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         """10 recs for one feed's x, logged under that feed so feedback and exploration work as usual."""
         cat, store = state["catalog"], state["store"]
         v, model = state["trainer"].current()
-        s = boost(score_feed(model, f["x"], cat.vecs, cat.prior, *store.votes(f["id"])), cat.movies, boost_tags)
+        s = boost(score_feed(model, f["x"], cat.vecs, cat.prior, *store.votes(f["id"]), recency=cat.recency), cat.movies, boost_tags)
         items = pick(s, exclude=store.rated_movies(f["id"]) | set(exclude))
         ids = store.add_recs(f["id"], items, v)
         return v, [
@@ -311,7 +311,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         v, model = state["trainer"].current()
         votes = [state["store"].votes(f["id"]) for f in g["members"].values()]
         pos, neg = set().union(*(p for p, _ in votes)), set().union(*(n for _, n in votes))
-        s = boost(score_feed(model, g["avg_x"], cat.vecs, cat.prior, pos, neg), cat.movies, body.boost)
+        s = boost(score_feed(model, g["avg_x"], cat.vecs, cat.prior, pos, neg, recency=cat.recency), cat.movies, body.boost)
         group = [
             {
                 "rec_id": None,
