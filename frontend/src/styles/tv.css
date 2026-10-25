@@ -167,6 +167,49 @@
   transition-delay: 0.25s;
 }
 
+/* Full curtains that open the night onto the lobby. Hidden unless GSAP runs
+   them, so reduced motion simply skips the reveal. */
+.reveal {
+  position: absolute;
+  inset: 0;
+  z-index: 15; /* over everything, End session included */
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.reveal-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50.5%;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.07), transparent 28%, rgba(0, 0, 0, 0.4)),
+    repeating-linear-gradient(90deg, var(--curtain-b) 0, var(--curtain-a) 2cqw, var(--curtain-b) 4cqw);
+}
+
+/* Gold fringe along the hem. */
+.reveal-panel::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1.1cqw;
+  background: repeating-linear-gradient(90deg, var(--gold) 0 0.35cqw, var(--gold-deep) 0.35cqw 0.7cqw);
+}
+
+.reveal-panel--left {
+  left: 0;
+  transform-origin: left center;
+  box-shadow: 1cqw 0 2.4cqw rgba(0, 0, 0, 0.55);
+}
+
+.reveal-panel--right {
+  right: 0;
+  transform-origin: right center;
+  box-shadow: -1cqw 0 2.4cqw rgba(0, 0, 0, 0.55);
+}
+
 /* ---- Lobby ---- */
 
 .lobby {
