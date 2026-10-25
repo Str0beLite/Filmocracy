@@ -96,7 +96,10 @@ class Trainer:
             if not train and not any(f["neg"] for f in feeds.values()):
                 return None
 
-            cand = from_state(self.w0, state(self.model))   # warm start from the live W
+            # Every round starts from the seed W, not the live one: warm starts after every vote stacked thousands of
+            # steps on ~150 votes and overfit (held-out yes votes fell from the top ~3% to the top ~13% of the catalog).
+            start = torch.load(config.SEED_W) if config.SEED_W.exists() else state(Translator(self.w0))
+            cand = from_state(self.w0, start)
             cand.train()
             opt = torch.optim.Adam(cand.parameters(), lr=config.LR)
             t0 = time.time()
