@@ -330,8 +330,7 @@ def test_trailer_validation_and_modular_ranking(monkeypatch):
 
     async def checks():
         async with httpx.AsyncClient() as c:
-            with pytest.raises(HTTPException):
-                await verify_trailer(c, row)
+            assert await verify_trailer(c, row)  # no key: trust the catalog's trailer
         monkeypatch.setenv("YOUTUBE_API_KEY", "test-only")
 
         def response(request):

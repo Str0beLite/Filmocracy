@@ -11,7 +11,7 @@ Sign-in is a plain user id. Each browser makes up a random id on its first visit
 
 ## Backend: one-time setup
 
-Requires: Linux with systemd, Python 3.12, `filmocracy.party` in your Cloudflare account, and a filled-in `backend/.env` (`MUSE_API_KEY`).
+Requires: Linux with systemd, Python 3.12, `filmocracy.party` in your Cloudflare account, and a filled-in `backend/.env` (`MUSE_API_KEY`; optionally `YOUTUBE_API_KEY`, which drops blocked or private trailers. Without it, catalog trailers are trusted as-is).
 
 **1. cloudflared and the tunnel**
 
