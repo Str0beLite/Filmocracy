@@ -31,7 +31,7 @@ else
 fi
 sed -i '/^TANDEM_DATA_DIR=/d' "$env"   # per machine: a file copied from another host may carry its path
 echo "TANDEM_DATA_DIR=$HOME/.local/share/filmocracy" >> "$env"
-grep -q '^FRONTEND_ORIGINS=' "$env" || echo 'FRONTEND_ORIGINS=https://filmocracy.party,http://localhost:5173' >> "$env"
+grep -q '^FRONTEND_ORIGINS=' "$env" || echo 'FRONTEND_ORIGINS=https://filmocracy.party,https://beta.filmocracy.party,http://localhost:5173' >> "$env"
 for k in MUSE_API_KEY YOUTUBE_API_KEY; do grep -q "^$k=." "$env" || echo "warning: $k is not set in $env" >&2; done
 
 cp "$repo"/deploy/selfhost/*.service "$repo"/deploy/selfhost/*.timer ~/.config/systemd/user/

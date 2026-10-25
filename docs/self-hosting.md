@@ -110,6 +110,16 @@ deploy/selfhost/stop.sh                   # stop everything: the services and/or
 
 From then on, every push to `main` redeploys the frontend, and the timer redeploys the backend within about a minute.
 
+### Beta: `dev` at beta.filmocracy.party
+
+Only the frontend differs. The beta frontend talks to the same `api.filmocracy.party`, so it shares the votes and W. Pages builds every branch by default, and `dev` gets the alias `dev.<project>.pages.dev`.
+1. Wait for one successful `dev` deployment (in **Deployments**).
+2. Go to **Custom domains**, then **Set up a custom domain**, enter `beta.filmocracy.party`, then choose **Continue**, then **Activate domain**.
+3. In the `filmocracy.party` zone's **DNS**, change the `beta` CNAME target from `<project>.pages.dev` to `dev.<project>.pages.dev`. Keep it proxied. Otherwise it serves production.
+4. If posters are missing on beta, make sure `VITE_TMDB_TOKEN` is also set for preview builds.
+
+`FRONTEND_ORIGINS` (set by `install.sh`) already includes `https://beta.filmocracy.party`.
+
 ## Quick test without a domain
 
 ```bash

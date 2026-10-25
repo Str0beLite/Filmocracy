@@ -2,7 +2,7 @@
 
 > **Unified SQLite service:** Docker/Railway run `unified:app`; `app:app` is an alias. Use [the integration guide](../docs/unified-backend.md) for durable QR sessions, atomic votes, authenticated WebSocket updates (with SSE compatibility), metadata migration and deployment. Supabase is no longer required. All recommendation routes below remain available; unified disables model training.
 >
-> Run from the repository root: `backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 8000`. Callers send their user id as `Authorization: Bearer <id>` (see [self-hosting](../docs/self-hosting.md)); set a YOUTUBE_API_KEY for queue validation. The standalone documentation below retains its original live-training development mode.
+> Local development: `backend/dev.sh` (see `frontend/README.md`). Or run from the repository root: `backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 8000`. Callers send their user id as `Authorization: Bearer <id>` (see [self-hosting](../docs/self-hosting.md)); set a YOUTUBE_API_KEY for queue validation. The standalone documentation below retains its original live-training development mode.
 
 # Backend
 
