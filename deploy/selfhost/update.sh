@@ -10,6 +10,11 @@ git reset -q --hard origin/main   # this clone is deploy-only; nobody edits it
 if ! git diff --quiet "$old" HEAD -- backend/requirements.txt; then
   backend/.venv/bin/pip install -q -r backend/requirements.txt
 fi
+if ! git diff --quiet "$old" HEAD -- backend/catalog/movies.json; then
+  # A new catalog moves the centre that feed vectors are measured from; rebuild them (idempotent).
+  data=$(grep -m1 '^TANDEM_DATA_DIR=' "$HOME/.config/filmocracy/backend.env" | cut -d= -f2-)
+  TANDEM_DATA_DIR=${data:-backend/data} PYTHONPATH=backend backend/.venv/bin/python backend/scripts/recenter_feeds.py
+fi
 echo "deployed $(git rev-parse --short HEAD)"
 if systemctl --user is-active -q filmocracy-api; then
   systemctl --user restart filmocracy-api

@@ -170,6 +170,7 @@ const status = (online: boolean) => listeners.forEach((l) => l.onStatus(online))
 const PREJOIN: Snapshot = {
   serverNow: 0,
   joined: false,
+  ended: false,
   invite: '',
   roundId: null,
   code: '',
@@ -215,6 +216,7 @@ function toSnapshot(st: BackendState, sg: Stage): Snapshot {
     ...PREJOIN,
     serverNow: Date.parse(st.server_now),
     joined: true,
+    ended: st.session.status === 'ended',
     invite,
     roundId: sg.roundId,
     code: st.session.id.slice(0, 4).toUpperCase(),
@@ -589,6 +591,13 @@ async function run(action: string, body: Record<string, unknown>, sid: string | 
       return null;
     case 'newNight':
       return newNight();
+    case 'end': {
+      // Ends tonight for every phone, then opens a fresh lobby with a new QR code.
+      await http(`/sessions/${sid}/control`, { action: 'end' });
+      const made = await http<{ session_id: string; invite_token: string }>('/sessions', { display_name: 'TV' });
+      invite = made.invite_token;
+      return follow(made.session_id);
+    }
     case 'devAdvance':
       // Dev fast-forward: trailer -> vote -> close the round as it stands -> next.
       if (stage.phase === 'trailer') return run('endTrailer', {}, sid);

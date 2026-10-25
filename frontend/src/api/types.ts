@@ -74,6 +74,7 @@ export interface Reaction {
 export interface Snapshot {
   serverNow: number;
   joined: boolean; // false on a phone that hasn't joined a session yet
+  ended: boolean; // the TV ended this night for everyone
   invite: string; // TV only: the invitation token behind the QR code
   roundId: string | null; // the backend's voting round for the current trailer
   code: string;

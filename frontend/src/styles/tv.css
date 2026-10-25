@@ -94,6 +94,13 @@
   background: var(--surface-2);
 }
 
+.tv-end {
+  position: absolute;
+  bottom: 1.8cqw;
+  left: 2.4cqw;
+  z-index: 12;
+}
+
 .tv-btn--sm {
   padding: 0.6em 1.1em;
   font-size: 1.05cqw;

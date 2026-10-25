@@ -28,3 +28,4 @@
   .training-page--watch .ps-title { font-size: 42px; }
   .training-page--watch .training-trailer { max-height: min(36dvh, 360px); }
 }
+div.training-trailer { display: grid; place-items: center; color: var(--muted); }

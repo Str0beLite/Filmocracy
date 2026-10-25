@@ -85,3 +85,5 @@ One line each: date, decision, why.
 - Phone account screen (`/phone/account`): favourites are `favourite` events listed across all of a person's feeds (`/me/favourites`); `DELETE /me` erases feeds, events and recs, and keeps a nameless profile only where past sessions reference it.
 - Less predictable picks: popularity weight capped at -2 (TANDEM_POP_MAX, now also in the movie-night queue), every ranking sampled with Gumbel noise (TANDEM_TEMPERATURE=0.05: median pick ~rank 60, reruns share ~7%), replacing the fixed 8 best + 2 exploration picks.
 - Mood weighs more: TAG_BOOST 0.15 -> 0.3, so ~85-100% of one person's picks fit their feeling (was 36-77%).
+- Movie nights pick from the whole catalog, now the 10,000 most-rated ml-25m genome films (first 5,000 unchanged, so stored movie_idx stay valid). Trailers and titles are looked up live from TMDB by tmdb_id; no metadata is prefetched. Before, the queue could only use the 63 catalog films among TMDB's 200 most popular, so it showed the same ~20.
+- End night on the TV: control `end`, phones show a wrap screen, the TV opens a fresh lobby.

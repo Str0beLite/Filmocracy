@@ -546,3 +546,27 @@ export function PhoneShowing() {
     </section>
   );
 }
+
+// The TV ended the night. Done drops this phone out of the old room, ready for the next QR code.
+export function PhoneEnded() {
+  const { setMe } = usePhone();
+  return (
+    <section className="ps ps--center">
+      <h1 className="ps-title display" tabIndex={-1}>
+        That’s a wrap.
+      </h1>
+      <p className="ps-sub">The big screen ended movie night. Scan its new QR code to start another.</p>
+      <div className="ps-foot">
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            sessionStorage.removeItem('tandem.phone.invite');
+            act('leave').finally(() => setMe(null));
+          }}
+        >
+          Done
+        </button>
+      </div>
+    </section>
+  );
+}
