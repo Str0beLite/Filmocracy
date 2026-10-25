@@ -1,5 +1,13 @@
 # Hackathon Template
 
+## Tandem backend handoff
+
+The Tandem Supabase/FastAPI backend is implemented. Teammates and their agents
+should start with [docs/backend-handoff.md](docs/backend-handoff.md) for the current
+state, ownership boundaries, file map, contracts, and verification status.
+Run instructions are in [backend/README.md](backend/README.md).
+The template setup instructions below are retained for reference.
+
 Starter repo for fast hackathon builds with AI coding agents. Pick a stack, run the agent kit installer, and start shipping.
 
 ## Quick start
