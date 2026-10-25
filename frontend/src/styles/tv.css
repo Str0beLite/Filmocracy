@@ -339,6 +339,16 @@
   pointer-events: none;
 }
 
+.scene-toggle {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
 .scene.is-paused {
   filter: blur(0.8cqw) brightness(0.62) saturate(0.9);
   transform: scale(1.05);

@@ -2,11 +2,11 @@
 // device that moves the night forward; phones wait, react and vote.
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { ArrowRight, Check, Play, RotateCcw, SkipForward, Star } from 'lucide-react';
+import { ArrowRight, Check, Pause, Play, RotateCcw, SkipForward, Star } from 'lucide-react';
 import { CHECKPOINT_EVERY, FEELINGS, MISS_MS, act, movie, type Movie, type Snapshot } from '../api';
 import { ActionButton, Avatar, CompletionStatus, Confetti, LivePill, PickSource, Poster, QR, Seat, Wildcard, Wordmark } from '../components/ui';
 import { FEELING_ICONS } from '../lib/feelings';
-import { completion, fmtTime, joinUrl } from '../lib/night';
+import { completion, fmtTime, joinUrl, trailerProgress } from '../lib/night';
 import { gsap, useMotion } from '../lib/motion';
 import { useTrailer } from '../api/tmdb';
 import { useRoom, useServerNow } from '../room/useRoom';
@@ -97,11 +97,30 @@ function Scene({ film, progress, paused }: { film: Movie; progress: number; paus
 const YT = 'https://www.youtube-nocookie.com';
 
 // The real trailer (a YouTube key from TMDB), played to its end. Listens to the
-// embed's postMessage events: once it plays, the night is timed to the video;
-// when it ends, voting opens. onFail drops back to the placeholder scene.
-function TrailerVideo({ film, ytKey, round, onFail }: { film: Movie; ytKey: string; round: number; onFail: () => void }) {
+// embed's postMessage events: each time it starts playing, the night is timed
+// to the video; when it ends, voting opens. Follows the room's pause.
+// onFail drops back to the placeholder scene.
+function TrailerVideo({
+  film,
+  ytKey,
+  round,
+  paused,
+  onFail,
+}: {
+  film: Movie;
+  ytKey: string;
+  round: number;
+  paused: boolean;
+  onFail: () => void;
+}) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const timed = useRef(false);
+  const video = useRef({ state: -1, time: 0, duration: 0 });
+  useEffect(() => {
+    frame.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'command', func: paused ? 'pauseVideo' : 'playVideo', args: [], id: 1, channel: 'widget' }),
+      YT,
+    );
+  }, [paused]);
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== YT || e.source !== frame.current?.contentWindow) return;
@@ -113,9 +132,14 @@ function TrailerVideo({ film, ytKey, round, onFail }: { film: Movie; ytKey: stri
       }
       const info = typeof msg.info === 'object' ? msg.info : undefined;
       if (msg.event === 'onError') onFail();
-      if (info?.playerState === 1 && info.duration && !timed.current) {
-        timed.current = true;
-        act('trailerPlaying', { round, ms: info.duration * 1000, at: (info.currentTime ?? 0) * 1000 });
+      const v = video.current;
+      if (info?.duration) v.duration = info.duration;
+      if (info?.currentTime !== undefined) v.time = info.currentTime;
+      if (info?.playerState !== undefined) {
+        if (info.playerState === 1 && v.state !== 1 && v.duration) {
+          act('trailerPlaying', { round, ms: v.duration * 1000, at: v.time * 1000 });
+        }
+        v.state = info.playerState;
       }
       if (info?.playerState === 0 || (msg.event === 'onStateChange' && msg.info === 0)) {
         act('endTrailer', { round });
@@ -155,7 +179,8 @@ export function TVTrailer() {
   const trailer = useTrailer(film.tmdbId);
   const [failed, setFailed] = useState<string | null>(null);
   const onFail = useCallback(() => setFailed(trailer), [trailer]);
-  const progress = Math.min(1, Math.max(0, (now - (s.trailerStartedAt ?? now)) / s.trailerMs));
+  const progress = trailerProgress(s, now);
+  const paused = s.pausedAt !== null;
   const seated = seatedOf(s);
   const byId = Object.fromEntries(s.people.map((p) => [p.id, p]));
   // Feelings in the room that this film's tags actually match.
@@ -165,10 +190,17 @@ export function TVTrailer() {
   return (
     <section className="tv-view trailer on-film" style={filmStyle(film)}>
       {trailer && failed !== trailer ? (
-        <TrailerVideo key={s.round} film={film} ytKey={trailer} round={s.round} onFail={onFail} />
+        <TrailerVideo key={s.round} film={film} ytKey={trailer} round={s.round} paused={paused} onFail={onFail} />
       ) : (
-        <Scene film={film} progress={progress} paused={false} />
+        <Scene film={film} progress={progress} paused={paused} />
       )}
+      {/* Clicking the picture pauses or plays too; the Pause button is the keyboard route. */}
+      <button
+        className="scene-toggle"
+        aria-label={paused ? 'Play trailer' : 'Pause trailer'}
+        tabIndex={-1}
+        onClick={() => act(paused ? 'resumeTrailer' : 'pauseTrailer').catch(() => {})}
+      />
       <div className="letterbox letterbox--top" />
       <div className="letterbox letterbox--bottom" />
       <CompletionStatus value={completion(s)} className="tv-hud" />
@@ -213,6 +245,17 @@ export function TVTrailer() {
           <span>
             {fmtTime(progress * s.trailerMs)} / {fmtTime(s.trailerMs)}
           </span>
+          <ActionButton action={paused ? 'resumeTrailer' : 'pauseTrailer'} className="tv-btn tv-btn--ghost tv-btn--sm">
+            {paused ? (
+              <>
+                Play <Play aria-hidden="true" fill="currentColor" strokeWidth={0} />
+              </>
+            ) : (
+              <>
+                Pause <Pause aria-hidden="true" fill="currentColor" strokeWidth={0} />
+              </>
+            )}
+          </ActionButton>
           <ActionButton action="endTrailer" className="tv-btn tv-btn--ghost tv-btn--sm">
             Skip to vote <SkipForward aria-hidden="true" />
           </ActionButton>

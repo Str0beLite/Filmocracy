@@ -22,6 +22,7 @@ import {
 import { EMOTES, FEELINGS, act, movie, type Snapshot } from '../api';
 import { Avatar, Confetti, LivePill, PickSource, Poster, Seat, Wildcard, Wordmark } from '../components/ui';
 import { FEELING_ICONS } from '../lib/feelings';
+import { trailerProgress } from '../lib/night';
 import { gsap, useElapsed, useMotion } from '../lib/motion';
 import { useRoom, useServerNow } from '../room/useRoom';
 import { usePhone } from './usePhone';
@@ -424,7 +425,7 @@ export function PhoneReact() {
   const { me } = usePhone();
   const now = useServerNow();
   const film = movie(s.movieId!);
-  const progress = Math.min(1, Math.max(0, (now - (s.trailerStartedAt ?? now)) / s.trailerMs));
+  const progress = trailerProgress(s, now);
   const [bursts, setBursts] = useState<{ id: number; idx: number; emoji: string }[]>([]);
   const nextId = useRef(0);
   const send = (idx: number) => {
@@ -439,7 +440,13 @@ export function PhoneReact() {
         <Poster movie={film} />
         <div className="np-text">
           <p className="np-live">
-            <span className="live-dot" aria-hidden="true" /> On the big screen
+            {s.pausedAt ? (
+              'Paused on the big screen'
+            ) : (
+              <>
+                <span className="live-dot" aria-hidden="true" /> On the big screen
+              </>
+            )}
           </p>
           <p className="np-title">{film.title}</p>
           <div className="np-progress">

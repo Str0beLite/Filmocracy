@@ -16,6 +16,12 @@ export function listNames(names: string[]) {
   return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
 }
 
+// How far into the current trailer, 0..1. Frozen while the TV has it paused.
+export function trailerProgress(s: Snapshot, now: number) {
+  const at = (s.pausedAt ?? now) - (s.trailerStartedAt ?? now);
+  return Math.min(1, Math.max(0, at / s.trailerMs));
+}
+
 export function fmtTime(ms: number) {
   const sec = Math.max(0, Math.round(ms / 1000));
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
