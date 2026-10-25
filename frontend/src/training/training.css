@@ -21,7 +21,8 @@
 .training-votes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .training-votes .vote-btn { min-height: 84px; gap: 6px; padding: 8px; border-radius: 16px; font-size: 18px; line-height: 1.2; }
 .training-votes .vote-btn svg { width: 28px; height: 28px; }
-.training-votes .vote-btn small { display: block; margin-top: 2px; font-size: 12px; font-weight: 600; }
+.training-votes .vote-btn:not(.vote-btn--yes):not(.vote-btn--no) { background: var(--surface); color: var(--text); border: 1px solid var(--line-strong); }
+.training-change { min-height: 44px; padding: 8px; border: 0; background: transparent; text-decoration: underline; color: var(--text); }
 .training-secondary { display: flex; gap: 10px; }
 .training-secondary .btn { flex: 1; min-height: 44px; padding: 10px 12px; font-size: 14px; }
 .training-about { color: var(--muted); font-size: 14px; }
