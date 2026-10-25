@@ -1,37 +1,64 @@
-# Hackathon Template
+# Tandem
 
-Starter repo for fast hackathon builds with AI coding agents. Pick a stack, run the agent kit installer, and start shipping.
+**Movie recommendations from your Instagram feed.** Upload a few screenshots of your feed, and Tandem tells you which films you'll love. You never rate a single movie: your feed already says what your taste is.
+
+Under the hood is a small learned matrix **W** that translates "Instagram taste" into "film taste". It starts as a zero-shot guess and gets better with every 👍 and 👎, live, while the app is running.
+
+## How it works
+
+```
+ feed screenshots ──► Llama vision ──► tags {"gym": 0.9, "dark humor": 0.6, ...}
+                                            │  embed each tag, weighted mean
+                                            ▼
+                                     x  (384-dim feed vector)
+                                            │  ŷ = normalize(W x)
+                                            ▼
+ movie tag database ──► embed tags ──► t_m per film ──► score = ŷ · t_m ──► 10 recs
+                                                                              │
+                                     W = I + ABᵀ  ◄── retrain every 20 taps ◄─┘
+```
+
+1. **Read the feed.** A Meta Llama vision model looks at each screenshot and writes free-form tags with weights. The tags cover what's on screen ("street food", "deadlift") and how it feels ("cozy", "chaotic energy"). Ads get dropped.
+2. **Embed both sides the same way.** Every tag, from the feed or from the movie tag database, goes through one frozen text encoder (`bge-small`). A bag of tags becomes the weighted mean of its tag vectors. No fixed tag lists anywhere: any tag works on either side.
+3. **Translate.** W maps the feed vector into film-taste space. On day 0, W is the identity, so tags match by meaning ("dark humor" ≈ "dark comedy").
+4. **Recommend.** Films are ranked by cosine to the translated vector. You get the top 8, plus 2 exploration picks so the model can learn beyond what it already believes. Each pick says which of your feed's tags drove it.
+5. **Learn live.** Feedback is logged to SQLite. Every 20 taps, W retrains on all feedback so far. The training does two things: it moves W x toward the user's loved-film vector, and it ranks loved films above everything else. The new W only goes live if held-out recall doesn't drop. W is shared, so it learns links like "gym feed → underdog films" from early users and applies them to everyone after.
+
+The full math, and the contract between each piece, are in **[docs/algorithm.md](docs/algorithm.md)**.
+
+## Repo layout
+
+| Path | What's there |
+|---|---|
+| `backend/` | FastAPI service: vision, embeddings, W, live trainer, SQLite log. [Setup, API and deploy →](backend/README.md) |
+| `backend/tandem/` | `vision.py` (Llama), `encoder.py` (tag embeddings), `model.py` (W + loss), `trainer.py` (live loop), `recommend.py`, `api.py` |
+| `backend/scripts/build_catalog.py` | One-off builder: movie tag database → film vectors |
+| `frontend/` | Client app (in progress) |
+| `docs/algorithm.md` | How the algorithm works, split into pieces with owners and interfaces |
+| `docs/decisions.md` | One-line log of design and stack choices |
 
 ## Quick start
 
-1. Click **Use this template** on GitHub and create your repo, then clone it.
-2. Install the agent skill kit:
+```bash
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
 
-   ```bash
-   ./install-agent-kit.sh --claude        # mixed team: every agent + the Claude Code layer
-   ./install-agent-kit.sh                 # no Claude Code users on the team
-   ```
+# 1. Build the movie catalog once (MovieLens tag genome, or any movie_id,title,tag,weight CSV)
+python scripts/build_catalog.py --genome-dir ~/Downloads/ml-32m --top 5000
 
-   Optional extras: `--supabase` (when the app needs a DB), `--son-wtf` (teaching skill). Full details in [docs/agent-kit.md](docs/agent-kit.md).
-3. Commit the generated `.agents/`, `.claude/`, `AGENTS.md`, `CLAUDE.md` and `GEMINI.md` so the whole team gets the same skills.
-4. Fill in [docs/idea.md](docs/idea.md), then let your agent grill you on it (`/grill-with-docs` in Claude Code).
-5. Scaffold the stack into `frontend/` and `backend/`.
+# 2. Run
+export LLAMA_API_KEY=...          # Meta Llama API key, for screenshots
+uvicorn tandem.api:app --reload
 
-## Layout
+# 3. Try it (no key needed when you pass tags directly)
+curl -F 'tags={"dark humor":1,"neon night drives":0.7,"gym rat":0.4}' localhost:8000/feeds
+curl localhost:8000/feeds/<feed_id>/recs
+```
 
-| Folder | What goes here |
-|---|---|
-| `frontend/` | The client app (web, mobile, whatever the hackathon needs) |
-| `backend/` | API, workers, DB schema and migrations |
-| `docs/` | Idea, decisions, pitch notes, and the agent kit docs |
-| `install-agent-kit.sh` | Installs the shared skill kit for Claude Code, Codex, Cursor, Copilot, Gemini and more |
+Tests: `cd backend && pytest -q`. They use a fake encoder and a synthetic catalog, so they need no keys and no downloads.
 
-Stack is picked per hackathon, so `frontend/` and `backend/` start empty on purpose. Each has a README with suggested one-liners.
+## Stack
 
-## Hackathon checklist
-
-- [ ] Agent kit installed and committed
-- [ ] Idea + MVP scope written in `docs/idea.md`
-- [ ] Stack scaffolded, runs locally
-- [ ] Deployed somewhere with a public URL
-- [ ] Demo script in `docs/pitch.md`
+Python, FastAPI, PyTorch (CPU), `sentence-transformers` (`BAAI/bge-small-en-v1.5`), Meta Llama 4 vision (OpenAI-compatible API), and SQLite. It deploys as one Docker container on Railway, with a volume at `/data` for the event log and W checkpoints.
