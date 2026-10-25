@@ -8,7 +8,7 @@ import { gsap, useMotion } from '../lib/motion';
 import { FeelingStep, NameStep, READ_MS, ReadingStep, ScreenshotsStep } from '../phone/onboarding';
 import './training.css';
 
-type Step = 'name' | 'feeling' | 'screenshots' | 'reading' | 'watch' | 'done';
+type Step = 'loading' | 'name' | 'feeling' | 'screenshots' | 'reading' | 'watch' | 'done';
 interface Recommendation {
   rec_id: number;
   score?: number;
@@ -27,7 +27,7 @@ function Top() {
 }
 
 export function Training() {
-  const [step, setStep] = useState<Step>('name');
+  const [step, setStep] = useState<Step>('loading');
   const [name, setName] = useState('');
   const [feeling, setFeeling] = useState<FeelingId | null>(null);
   const [files, setFiles] = useState<File[]>([]);
@@ -53,8 +53,18 @@ export function Training() {
   useEffect(() => {
     document.title = 'Train Your Taste · Filmocracy';
   }, []);
-  useEffect(() => { if (seen !== null) ballotTitle.current?.focus(); }, [seen]);
+  // Returning visitors keep their name and latest feed (same profile and feeds as the app), so skip straight to feeling.
+  useEffect(() => {
+    Promise.all([http<{ display_name: string | null }>('/profiles/me'), http<{ feed_id: string | null; tags?: Record<string, number> }>('/me')])
+      .then(([profile, me]) => {
+        if (profile.display_name) setName(profile.display_name);
+        if (me.feed_id) { setFeed(me.feed_id); setTags(Object.keys(me.tags ?? {}).slice(0, 8)); }
+        setStep(profile.display_name ? 'feeling' : 'name');
+      })
+      .catch(() => setStep('name'));
+  }, []);
   useEffect(() => { scope.current?.querySelector('h1')?.focus(); }, [step]);
+  useEffect(() => { if (seen !== null) ballotTitle.current?.focus(); }, [seen]);
   useMotion(() => { gsap.from('.ps > *', { y: 14, autoAlpha: 0, stagger: 0.04, duration: 0.5, ease: 'expo.out' }); }, scope, [step]);
   useEffect(() => () => previewUrls.current.forEach((url) => URL.revokeObjectURL(url)), []);
   useEffect(() => {
@@ -140,6 +150,7 @@ export function Training() {
 
   const err = error && <p className="field-error" role="alert">{error}</p>;
 
+  if (step === 'loading') return <main className="phone training" ref={scope} aria-busy="true" />;
   if (step === 'name') return <main className="phone training" ref={scope}>
     <NameStep top={<Top />} sub="No account needed. Pick a name, choose a feeling, and share 1–3 Explore screenshots. Then watch trailers and vote." cta="Continue" busy={busy} error={error} onSubmit={(n) => void run(async () => {
       await http('/profiles/me', { display_name: n });
@@ -148,7 +159,8 @@ export function Training() {
     })} />
   </main>;
   if (step === 'feeling') return <main className="phone training" ref={scope}>
-    <FeelingStep top={<Top />} sub="We’ll use this feeling to shape your trailer picks." feeling={feeling} onPick={setFeeling} onContinue={() => setStep('screenshots')} />
+    <FeelingStep top={<Top />} sub={feed ? `Welcome back, ${name}. We’ll use this feeling to shape your trailer picks.` : 'We’ll use this feeling to shape your trailer picks.'} feeling={feeling} onPick={setFeeling}
+      onContinue={() => { if (!feed) return setStep('screenshots'); setStep('watch'); void run(() => next(feed)); }} />
   </main>;
   if (step === 'screenshots') return <main className="phone training" ref={scope}>
     <ScreenshotsStep
