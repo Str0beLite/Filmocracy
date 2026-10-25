@@ -1,24 +1,25 @@
 # Idea
 
-**One-liner:** Tandem picks a movie an existing friend group will all say yes to, from what each person likes on Instagram, and settles it with trailers and a phone vote.
+**One-liner:** Pick a movie as a group, from everyone's Instagram taste, by voting yes/no on trailers.
 
-**Problem:** Friend groups lose movie night to "what do you want to watch?" Scrolling a streaming menu together is slow and someone always ends up settling.
+**Problem:** Groups waste the night scrolling and arguing over what to watch, and nobody wants to rate 50 movies to get recommendations.
 
-**Users:** Established friend groups watching together in one room on a shared screen (TV, laptop, iPad, projector).
+**Users:** Friends on a movie night. A host puts Tandem on the big screen (TV, laptop, iPad, projector); everyone else joins on their phone.
 
 **MVP scope (must demo):**
-- Big screen shows a QR code; friends scan it with their phones and take a seat.
-- Each person says how they want to feel tonight, and connects Instagram; Tandem infers their movie taste from reels and feed interactions.
-- Big screen plays trailers picked for the group. Only the big screen moves things forward; phones wait, react and vote.
-- Each phone shows a check and a cross to vote on the current trailer (plus live emote reactions). Votes are private.
-- A learning model updates each person's preferences on every yes/no vote; the big screen shows a completion status bar as the group gets closer to a pick.
-- Golden buzzer when everyone votes yes.
+- Big screen shows a QR code; phones scan it and take a seat.
+- Google sign-in; onboarding = each person says how they want to feel tonight, then uploads 3 Instagram Explore screenshots once (split into tiles → Muse Spark → tags → taste embedding, remembered).
+- Backend returns a rec list per member plus one for the group's average taste; tonight's feelings become mood tags to boost.
+- Trailers play on the big screen. Only the big screen moves the night forward; phones wait, react and vote.
+- Each phone votes yes/no on the current trailer (plus live emote reactions). Votes are private, and they train W live.
+- The big screen shows a completion status bar as the group gets closer to a pick.
+- Golden buzzer when everyone votes yes. Every 5 trailers without one, the big screen offers "See our picks" or "Keep watching".
 - The night ends on the group's top 3 choices plus 5 more predicted recs.
 
 **Stretch (only if time):**
--
+- Smarter trailer picking from the per-member + group lists.
 
 **Out of scope:**
--
+- Rating movies one by one, social features, persisting group sessions across restarts.
 
 **Hackathon track / prizes targeted:**

@@ -5,8 +5,12 @@ build/
 .venv/
 __pycache__/
 *.pyc
+*.egg-info/
+.ruff_cache/
+supabase/.temp/
 .env
 .env.*
 !.env.example
+!.env.test.example
 .DS_Store
 *.log
