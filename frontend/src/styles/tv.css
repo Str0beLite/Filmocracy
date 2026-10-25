@@ -94,11 +94,12 @@
   background: var(--surface-2);
 }
 
+/* Top left on every screen, above the lobby's curtains. */
 .tv-end {
   position: absolute;
-  bottom: 1.8cqw;
+  top: 1.6cqw;
   left: 2.4cqw;
-  z-index: 12;
+  z-index: 14;
 }
 
 .tv-btn--sm {
@@ -476,7 +477,7 @@
 .trailer-top {
   position: absolute;
   top: 1.8cqw;
-  left: 2.6cqw;
+  left: 12cqw; /* clear of End session */
   z-index: 3;
   font-size: 1.1cqw;
 }

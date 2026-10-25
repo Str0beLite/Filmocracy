@@ -409,7 +409,6 @@ export function TVBuzzer() {
       <div className="buzzer-rays" aria-hidden="true" />
       <Confetti count={90} />
       <div className="buzzer-flash" aria-hidden="true" />
-      <CompletionStatus value={100} className="tv-hud" />
       <header className="buzzer-head">
         <h1 className="buzzer-title display">Golden Buzzer</h1>
         <p className="buzzer-sub">Everyone said yes.</p>
@@ -459,17 +458,11 @@ export function TVPicks() {
   const more = s.picks?.more ?? [];
   return (
     <section className="tv-view picks" ref={scope}>
-      <CompletionStatus value={100} className="tv-hud" />
       <header className="picks-head">
         <div>
           <h1 className="picks-title display">Your group’s top 3</h1>
           <p className="picks-sub">Golden buzzers first, then the trailers you liked, then what Filmocracy predicts.</p>
         </div>
-        {top[0] && (
-          <ActionButton action="showing" body={{ id: top[0].id }} className="tv-btn tv-btn--gold">
-            <Play aria-hidden="true" fill="currentColor" strokeWidth={0} /> Start #1
-          </ActionButton>
-        )}
       </header>
 
       <ol className="podium">
