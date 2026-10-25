@@ -1,0 +1,145 @@
+/* Dev-only tools: the screen index and the step bar. */
+
+.devbar {
+  position: fixed;
+  top: 50%;
+  right: 6px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  opacity: 0.45;
+  transform: translateY(-50%);
+  transition: opacity 0.2s;
+}
+
+.devbar:hover,
+.devbar:focus-within {
+  opacity: 1;
+}
+
+.devbar button,
+.devbar a {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #fff;
+}
+
+.devbar button:hover,
+.devbar a:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.devbar svg {
+  width: 18px;
+  height: 18px;
+}
+
+.dev-index {
+  max-width: 1120px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 48px 20px 64px;
+}
+
+.dev-index header {
+  max-width: 620px;
+  margin-bottom: 40px;
+}
+
+.dev-wordmark {
+  font-size: 34px;
+}
+
+.dev-index header p {
+  margin-top: 14px;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.dev-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 32px;
+}
+
+.dev-index h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.dev-index h2 svg {
+  width: 18px;
+  height: 18px;
+  color: var(--gold);
+}
+
+.dev-index ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dev-index li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.dev-index li a {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.dev-index li a:hover {
+  color: var(--gold);
+}
+
+.dev-index code {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.dev-qr {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-self: start;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.dev-qr .qr {
+  width: 100%;
+  max-width: 220px;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.dev-qr p {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--muted);
+}

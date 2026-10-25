@@ -1,39 +1,59 @@
 # Frontend
 
-## Demo UI (`demo/`)
+The Tandem app: the big screen (TV, laptop, projector) and the phone, in the Velvet look. Vite + React + TypeScript.
 
-A clickable prototype of the whole movie-night flow, used to nail down the look. The big screen and one phone sit side by side, and three fake friends (Maya, Jordan, Sam) join, react and vote on their own.
+**This pass is frontend only.** Every screen is real, but buttons only move to the next page and the data is mock. Nothing talks to the backend yet.
 
-Run it from the repo root:
+## Run it
+
+Needs Node 20.19 or newer (Node 24 LTS on the team laptop). From the repo root:
 
 ```bash
-python -m http.server 5173 --directory frontend/demo
+npm --prefix frontend install
+npm --prefix frontend run dev
 ```
 
-Then open http://localhost:5173. No install step: React, Babel and the QR library load from a CDN, so you need internet for the first load.
+Open http://localhost:5173. In dev, that page lists every screen.
 
-### Walkthrough
+- **Big screen:** open http://localhost:5173/tv/lobby on the laptop or TV, fullscreen it (F11).
+- **Phones:** must be on the same Wi-Fi as the laptop. Scan the QR code in the lobby, or the one on the index page. The dev server listens on the network and the QR code points at the laptop's Wi-Fi address, even when the TV page is open on localhost.
+- **Stepping through:** the arrows on the right edge of every screen (dev only) go to the next or previous screen, including the phone screens that would normally wait on the big screen.
 
-1. Click the QR code on the big screen (or **Scan** on the phone) to join.
-2. Pick how you want to feel tonight, then type a name and **Continue with Instagram**. The phone takes your seat on its own.
-3. From here the phone only waits, reacts and votes. Everything that moves the night forward is on the big screen: **Start the show**, **Skip to vote**, **See tonight's picks**, **Start #1**.
-4. Tap emotes on the phone while the trailer plays; they float up from your seat on the big screen.
-5. Vote. Votes stay private: screens only show who has locked in, then either the golden buzzer or "Not this one." The first trailer is scripted to miss; vote yes on the second for the golden buzzer.
-6. The night ends on the group's top 3 plus 5 more predicted picks. If nobody hits the golden buzzer, it lands there after the last trailer.
+Other commands: `npm run build` (type-check + production build), `npm run lint`, `npm run preview`.
 
-The **completion status** bar in the big screen's top-right corner is a loading bar for "how close are we to tonight's movie", not a model score. It's faked in `engine.jsx` (`completionStatus`): seating everyone fills 30%, votes and rounds push it up, and it hits 100% at a golden buzzer or the final picks.
+## How a night flows
 
-The toolbar switches between three looks (Velvet, Neon, Matinee) and restarts.
-
-### Where things live
-
-| File | What |
+| Big screen | Phone |
 |---|---|
-| `data.js` | Friends, moods, movies, scripted votes, the 5 predicted recs, Instagram "signals" and copy. Edit this to change the demo. |
-| `engine.jsx` | The scripted movie night: phases, timers, fake friends, completion status, pick ranking. |
-| `tv.jsx` | Big screen: lobby with QR, trailer, verdict, golden buzzer, top picks, now showing. |
-| `phone.jsx` | Phone: scan, tonight's feeling, connect Instagram, waiting screen, emotes, vote, results, picks. |
-| `shared.jsx` | Seats, avatars, posters, QR, confetti, completion bar, icons. |
-| `styles.css` | All styling. The three looks are token sets at the top of the file. |
+| `/tv/lobby`: QR code, seats, Start the show | `/phone/join` → `sign-in` → `feeling` → `screenshots` (3 Explore screenshots) → `reading` → `lobby` (waits) |
+| `/tv/trailer/:n` (auto-advances when it ends, or Skip to vote) | `/phone/react/:n`: emotes |
+| `/tv/vote/:n` → `/tv/reveal/:n` | `/phone/vote/:n` → `/phone/voted/:n` |
+| `/tv/buzzer/:n`: everyone said yes (picks or keep browsing) | `/phone/buzzer/:n` |
+| `/tv/miss/:n`, then the next trailer | `/phone/miss/:n` |
+| `/tv/checkpoint/:n`: every 5 trailers without a buzzer, picks or keep watching | `/phone/checkpoint/:n` |
+| `/tv/picks`: top 3 + 5 more, Start #1 | `/phone/picks` |
+| `/tv/showing/:id` | `/phone/showing/:id` |
 
-Trailers and posters are placeholder art generated from each movie's colors; there's no real video yet.
+Votes stay private: screens show who has voted, never how.
+
+The mock night is scripted in `src/api/mock.ts`: trailer 2 is a golden buzzer, and trailers 1 and 3–5 miss, so trailer 5 reaches the checkpoint.
+
+## Where things live
+
+| Path | What |
+|---|---|
+| `src/api/index.ts` | **The only place screens get data from.** Reads `mock.ts` today; wiring the backend means swapping these function bodies for fetches. |
+| `src/api/types.ts` | `Rec` matches the backend's rec shape; the rest is what screens need. |
+| `src/api/mock.ts` | Mock room, people, feelings (with the catalog tags each one boosts), trailers and picks. Films and ids are real rows from `backend/catalog/movies.json`. |
+| `src/router.tsx` | One URL per screen; loaders call `src/api`. |
+| `src/tv/`, `src/phone/` | Big-screen and phone screens. |
+| `src/components/ui.tsx` | Seats, posters, QR, completion bar, confetti. |
+| `src/lib/` | Night rules (checkpoint, completion bar), next-screen flow, GSAP helpers. |
+| `src/styles/` | `base.css` holds the Velvet tokens; `tv.css` and `phone.css` the screens. |
+| `demo/` | The original clickable demo (all three looks), kept as a reference. `python -m http.server 5174 --directory frontend/demo` |
+
+## Not wired yet
+
+These come with the backend (see `docs/decisions.md`): a sessions module that runs the night over WebSockets, Google sign-in (dev login locally), uploading screenshots to `POST /feeds`, re-ranking group recs after every vote, sending tonight's feelings as tag boosts, and TMDB posters and trailers by `tmdb_id`. Posters and trailers are generated placeholder art until then.
+
+`.env.example` lists the env vars the wired-up app will need.

@@ -27,7 +27,7 @@ One line each: date, decision, why.
 - 2026-10-24: The night ends on a top 3 (golden buzzers first, then by votes, then by prediction) plus 5 predicted recs.
 - 2026-10-24: Progress shows as a "completion status" loading bar in the big screen's top-right, not as a model confidence score.
 - 2026-10-24: Votes are private. Screens show who has voted and whether it was unanimous, never who said yes or no (no per-seat reveal, no counts).
-- 2026-10-25: Real app = Vite + React + TypeScript in `frontend/` on Node 22 LTS. Velvet is the only look; `frontend/demo` stays as a reference.
+- 2026-10-25: Real app = Vite + React + TypeScript in `frontend/` on Node 24 LTS (winget's current LTS). Velvet is the only look; `frontend/demo` stays as a reference.
 - 2026-10-25: First app pass is frontend only: buttons navigate, and screens read typed mock data shaped like the backend's responses through `src/api`. Swapping that module is how the backend gets wired in.
 - 2026-10-25: React Router, one URL per screen (`/tv/*`, `/phone/*`), plus a dev-only index of every screen at `/`.
 - 2026-10-25: Onboarding on the phone = join → Sign in with Google → tonight's feeling → 3 Instagram Explore screenshots → reading → waiting.
