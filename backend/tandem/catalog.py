@@ -27,7 +27,7 @@ class Catalog:
         return cls(json.loads((path / "movies.json").read_text()), np.load(path / "movie_vecs.npy"))
 
     def feed_vector(self, weights: dict):
-        """Any {tag: weight} from Llama -> x. Not centred: subtracting the film centre would make an
+        """Any {tag: weight} from Muse Spark -> x. Not centred: subtracting the film centre would make an
         unrelated feed point away from "generic film" and pull up oddballs for no reason."""
         return bag(weights)
 

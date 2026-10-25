@@ -109,9 +109,9 @@ python scripts/seed_fake.py --api http://localhost:8000      # 60 fake users, ab
 
 The algorithm is done: tags to x, W, recs, group lists, live training and the recall gate. Two pieces are owned by teammates now.
 
-**1. Screenshots → feed tags (`tandem/vision.py`).** This is a first version that has never run against the real API, because there was no `MUSE_API_KEY`. The contract the rest of the code depends on:
+**1. Screenshots → feed tags (`tandem/vision.py`).** Upstream reports real Explore screenshot testing; this branch verified a synthetic-image request (see the verification log). The contract the rest of the code depends on:
 - `read_screenshots([(bytes, media_type), ...])` returns one `(is_noise, {tag: weight 0..1})` per screenshot.
-- `merge(readings)` returns `({tag: weight}, n_dropped)`.
+- `summarize(readings)` (async) returns `({tag: weight}, n_dropped)`: one text-only call sums up every tile's tags, falling back to `merge()`'s plain average.
 - `POST /feeds` passes that dict to `catalog.feed_vector`, which turns it into x.
 
 Anything that produces lowercase free-form tags with weights works: a different model, a different prompt, or OCR of captions. Changing the encoder (`bge-small`) or `DIM` means rebuilding the catalog and throwing away `w_seed.pt` and every checkpoint.
@@ -180,3 +180,5 @@ Hugging Face Spaces (Docker, free CPU) also works, but its disk is wiped on rest
 All other knobs (rank, τ, λ, learning rate, steps) are in `tandem/config.py`.
 
 See the [Railway production handoff](../docs/railway-deployment.md) for current dashboard settings, production variables, approval boundaries and the post-deployment checklist.
+
+For the development-only vision demo with the unified API, serve `backend/scripts` with `python3 -m http.server 5173 --directory backend/scripts` and open `http://localhost:5173/vision_demo.html`. Keep the API on port 8000 with `TANDEM_DEV_AUTH=1` locally. This matches the default allowed frontend origin; opening the file directly has Origin `null` and is intentionally not allowed by unified CORS. Do not enable development auth on Railway.

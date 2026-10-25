@@ -76,7 +76,7 @@ files. Values below are placeholders/settings, never actual credentials.
 | `MUSE_API_KEY` | Server-only provider key, required for Instagram screenshot onboarding; tags-only feeds work without it |
 | `MUSE_BASE_URL` | Intended OpenAI-compatible vision provider endpoint; default `https://api.meta.ai/v1` |
 | `MUSE_MODEL` | Default `muse-spark-1.3` on Meta Model API |
-| `MUSE_REASONING` | Default `low`; empty omits the parameter. Meta supports minimal/low/medium/high/xhigh/max; `none` is rejected |
+| `MUSE_REASONING` | Default `minimal`; empty omits the parameter. Meta supports minimal/low/medium/high/xhigh/max; `none` is rejected |
 | `MUSE_MAX_TOKENS` | Default `4096`; includes internal reasoning and visible JSON output |
 
 Railway supplies `PORT`, `RAILWAY_ENVIRONMENT_ID`, and the volume's
@@ -210,3 +210,5 @@ The response parsed into 11 tags and was not marked as noise. Retries were disab
 neither the key nor image contents were logged. This verifies endpoint/model access
 and the request/response contract. Real Instagram screenshot quality, production
 quota/load and Railway connectivity still require post-deployment checks.
+
+Main update `89a01f0` changes the default to minimal reasoning and adds one text-only whole-feed summary after tile reads. Failed summaries fall back to the plain average. The earlier live test covered low-reasoning tile extraction; the new summary pass has mock/regression coverage and still needs live quality acceptance. The `/dev/feeds/{id}/top` preview and vision demo are development-only; production Railway keeps development auth disabled.

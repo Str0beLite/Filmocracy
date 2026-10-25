@@ -21,6 +21,7 @@ from . import config, grid, vision
 from .auth import current_user, require_admin
 from .catalog import Catalog
 from .encoder import get_encoder, unit
+from .model import Translator
 from .recommend import because_of, boost, pick, score_feed
 from .store import Store
 from .trainer import Trainer
@@ -47,9 +48,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         state["trainer"].stop()
 
     app = FastAPI(title="tandem", lifespan=lifespan)
-    app.add_middleware(
-        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
-    )
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     app.state.tandem = state
     # shortcut: groups live in memory and are lost on restart; move to SQLite if sessions must survive deploys.
     state["groups"] = {}
@@ -118,11 +117,9 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         weights, dropped = {}, 0
         if shots:
             if not vision.has_api_key():
-                raise HTTPException(
-                    503, f"screenshots need {config.MUSE_API_KEY_ENV}; send tags instead"
-                )
+                raise HTTPException(503, f"screenshots need {config.MUSE_API_KEY_ENV}; send tags instead")
             try:
-                weights, dropped = vision.merge(await vision.read_screenshots(shots))
+                weights, dropped = await vision.summarize(await vision.read_screenshots(shots))
             except APIError:
                 raise HTTPException(503, "Muse vision unavailable; retry or send tags instead")
         for t, w in manual.items():
@@ -143,16 +140,39 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
     def me(user: str = Depends(identity)):
         """The caller's latest feed. feed_id null = send them to onboarding (upload screenshots)."""
         f = state["store"].latest_feed(user)
-        return (
-            {"user": user, "feed_id": f["id"], "tags": f["tags"]}
-            if f
-            else {"user": user, "feed_id": None}
-        )
+        return {"user": user, "feed_id": f["id"], "tags": f["tags"]} if f else {"user": user, "feed_id": None}
+
+    if config.DEV_AUTH:
+        # shortcut: dev-only identity-W preview with a popularity nudge; no events or recommendations are logged.
+        @app.get("/dev/feeds/{fid}/top")
+        def top_recs(
+            fid: str,
+            k: int = Query(5, ge=1, le=50),
+            pop: float = Query(0.05, ge=0, le=1),
+            user: str = Depends(identity),
+        ):
+            f, cat = _feed(fid, user), state["catalog"]
+            model = Translator(cat.w0).eval()  # A = 0, so W = W0 = I
+            counts = np.array([m.get("popularity", 0) for m in cat.movies])
+            pct = counts.argsort().argsort() / (len(counts) - 1)  # 0 = least rated film, 1 = most rated
+            s = score_feed(model, f["x"], cat.vecs) + pop * pct**2
+            return {
+                "w_version": "identity",
+                "pop": pop,
+                "recs": [
+                    {
+                        **cat.public(int(i)),
+                        "score": float(s[i]),
+                        "because_of": because_of(model, f["tags"], cat.vecs[i]),
+                    }
+                    for i in np.argsort(-s)[:k]
+                ],
+            }
 
     class Favourites(BaseModel):
         titles: list[str] = []
-        movie_ids: list[int] = []   # exact catalog ids, when the client already knows the film
-        holdout_frac: float = 0.3   # hide this share for the held-out recall check
+        movie_ids: list[int] = []  # exact catalog ids, when the client already knows the film
+        holdout_frac: float = 0.3  # hide this share for the held-out recall check
 
     @app.post("/feeds/{fid}/favourites")
     def add_favourites(fid: str, body: Favourites, user: str = Depends(identity)):
@@ -199,9 +219,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         if missing:
             raise HTTPException(409, {"needs_onboarding": missing})
         g["members"].update(feeds)
-        g["avg_x"] = unit(np.mean([f["x"] for f in g["members"].values()], axis=0)).astype(
-            np.float32
-        )
+        g["avg_x"] = unit(np.mean([f["x"] for f in g["members"].values()], axis=0)).astype(np.float32)
 
     def _group_out(gid, g):
         return {"group_id": gid, "host": g["host"], "members": list(g["members"])}
@@ -259,9 +277,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
     class Feedback(BaseModel):
         rec_id: Optional[int] = None
         feed_id: Optional[str] = None
-        movie_id: Optional[int] = (
-            None  # catalog movie id, for feedback outside a rec list (e.g. a group vote)
-        )
+        movie_id: Optional[int] = None  # catalog movie id, for feedback outside a rec list (e.g. a group vote)
         label: Literal["love", "seen_loved", "nah"]
 
     @app.post("/feedback")
@@ -308,10 +324,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
 
     @app.get("/movies/search")
     def search(q: str, limit: int = 10, user=Depends(principal or public)):
-        return [
-            state["catalog"].public(state["catalog"].id_to_idx[m["id"]])
-            for m in state["catalog"].search(q, limit)
-        ]
+        return [state["catalog"].public(state["catalog"].id_to_idx[m["id"]]) for m in state["catalog"].search(q, limit)]
 
     return app
 

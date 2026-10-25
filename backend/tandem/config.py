@@ -30,7 +30,7 @@ MUSE_BASE_URL = _env("MUSE_BASE_URL", "https://api.meta.ai/v1")
 MUSE_MODEL = _env("MUSE_MODEL", "muse-spark-1.3")
 MUSE_API_KEY_ENV = "MUSE_API_KEY"
 # Muse Spark thinks before answering; thinking counts against max_tokens, so leave room for it.
-MUSE_REASONING = _env("MUSE_REASONING", "low")   # minimal | low | medium | high | xhigh | max; "" = model default
+MUSE_REASONING = _env("MUSE_REASONING", "minimal")   # minimal | low | medium | high | xhigh | max; "" = model default
 MUSE_MAX_TOKENS = _env("MUSE_MAX_TOKENS", 4096, int)
 
 # Translator W = I + A Bᵀ (DIM × DIM) and its training.

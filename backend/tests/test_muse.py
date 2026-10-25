@@ -73,13 +73,23 @@ def test_unified_upload_splits_tiles_and_uses_muse_contract(muse_setup, monkeypa
         assert str(request.url) == "https://api.meta.ai/v1/chat/completions"
         body = json.loads(request.content)
         assert body["model"] == "muse-spark-1.3"
-        assert body["reasoning_effort"] == "low" and body["max_tokens"] == 4096
+        assert body["reasoning_effort"] == "minimal" and body["max_tokens"] == 4096
         assert body["response_format"] == {
             "type": "json_schema",
             "json_schema": {"name": "feed_tags", "schema": vision.SCHEMA},
         }
         message = body["messages"][0]
         assert message["role"] == "user"
+        if message["content"][0]["type"] == "text":
+            assert len(message["content"]) == 1
+            assert "post 1:" in message["content"][0]["text"]
+            requests.append("summary")
+            return httpx.Response(
+                200,
+                json=completion(
+                    json.dumps({"is_ad_or_noise": False, "tags": [{"tag": "cozy", "weight": 0.8}]})
+                ),
+            )
         uri = message["content"][0]["image_url"]["url"]
         assert uri.startswith("data:image/png;base64,")
         assert Image.open(io.BytesIO(base64.b64decode(uri.split(",", 1)[1]))).size == (64, 64)
@@ -96,7 +106,7 @@ def test_unified_upload_splits_tiles_and_uses_muse_contract(muse_setup, monkeypa
         )
         assert response.status_code == 200
         out = response.json()
-        assert len(requests) == 6 and out["dropped_as_noise"] == 1
+        assert len(requests) == 7 and requests[-1] == "summary" and out["dropped_as_noise"] == 1
         assert out["tags"] == {"cozy": 0.8}
         assert store.get_feed(out["feed_id"])["user"] == "a"
         assert c.get("/health").json()["vision"] is True
@@ -149,3 +159,20 @@ def test_provider_failure_is_retryable_and_does_not_create_feed(muse_setup, monk
         assert response.status_code == 503
         assert response.json()["detail"] == "Muse vision unavailable; retry or send tags instead"
         assert store.latest_feed("a") is None
+
+
+def test_dev_preview_remains_optional_owned_and_unlogged(muse_setup, monkeypatch):
+    factory, store, _ = muse_setup
+    with TestClient(factory()) as c:
+        assert c.get("/dev/feeds/missing/top").status_code == 404
+    monkeypatch.setattr(config, "DEV_AUTH", True)
+    with TestClient(factory()) as c:
+        headers = {"Authorization": "Bearer a"}
+        fid = c.post("/feeds", headers=headers, data={"tags": '{"cozy":1}'}).json()["feed_id"]
+        path = f"/dev/feeds/{fid}/top?k=5"
+        assert c.get(path).status_code == 401
+        assert c.get(path, headers={"Authorization": "Bearer b"}).status_code == 404
+        result = c.get(path, headers=headers)
+        assert result.status_code == 200 and len(result.json()["recs"]) == 5
+        assert result.json()["w_version"] == "identity"
+        assert store._all("SELECT * FROM recs") == [] and store.count_events() == 0

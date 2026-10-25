@@ -3,7 +3,7 @@
     set -a; source .env; set +a
     python scripts/embed_screenshots.py ~/Desktop/shot1.png ~/Desktop/shot2.png
 
-Prints each screenshot's tags, the merged tags, and the 384-dim x. Needs MUSE_API_KEY (see config.MUSE_*).
+Prints each screenshot's tags, the summarized tags, and the 384-dim x. Needs MUSE_API_KEY (see config.MUSE_*).
 """
 import asyncio
 import mimetypes
@@ -22,18 +22,18 @@ def main(paths):
         sys.exit(__doc__)
     if not vision.has_api_key():
         sys.exit("set MUSE_API_KEY first (source .env)")
-    shots, labels = [], []
+    shots, names = [], []
     for p in paths:
         data = Path(p).read_bytes()
         tiles = grid.split_explore(data) or [(data, mimetypes.guess_type(p)[0] or "image/png")]
-        shots.extend(tiles)
-        labels.extend(f"{p} tile {i + 1}" for i in range(len(tiles)))
+        shots += tiles
+        names += [f"{Path(p).name} tile {i + 1}/{len(tiles)}" for i in range(len(tiles))]
     readings = asyncio.run(vision.read_screenshots(shots))
-    for p, (noise, tags) in zip(labels, readings):
-        print(f"{Path(p).name}: {'NOISE ' if noise else ''}{tags}")
-    tags, dropped = vision.merge(readings)
+    for name, (noise, tags) in zip(names, readings):
+        print(f"{name}: {'NOISE ' if noise else ''}{tags}")
+    tags, dropped = asyncio.run(vision.summarize(readings))
     x = bag(tags)
-    print("\nmerged:", dict(sorted(tags.items(), key=lambda kv: -kv[1])), f"(dropped {dropped} as noise)")
+    print("\nsummarized:", dict(sorted(tags.items(), key=lambda kv: -kv[1])), f"(dropped {dropped} as noise)")
     print(f"x: shape {x.shape}, norm {np.linalg.norm(x):.3f}, first 5 {np.round(x[:5], 3)}")
 
 
