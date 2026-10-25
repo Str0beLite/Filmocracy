@@ -149,9 +149,11 @@ export function CompletionStatus({ value, className = '' }: { value: number; cla
   );
 }
 
-// Placeholder poster art from the movie's palette, until TMDB posters land.
+// The TMDB poster, or placeholder art from the movie's palette when there's none (or it fails to load).
 export function Poster({ movie, className = '' }: { movie: Movie; className?: string }) {
   const [c1, c2, c3] = movie.palette;
+  const [failed, setFailed] = useState<string | null>(null);
+  const src = movie.posterUrl && failed !== movie.posterUrl ? movie.posterUrl : null;
   return (
     <div
       className={`poster poster--${movie.motif} ${className}`}
@@ -159,10 +161,14 @@ export function Poster({ movie, className = '' }: { movie: Movie; className?: st
       aria-hidden="true"
     >
       <div className="poster-art" />
-      <div className="poster-type">
-        <span className="poster-title">{movie.title}</span>
-        <span className="poster-year">{movie.year}</span>
-      </div>
+      {src ? (
+        <img className="poster-img" src={src} alt="" width={500} height={750} loading="lazy" decoding="async" onError={() => setFailed(src)} />
+      ) : (
+        <div className="poster-type">
+          <span className="poster-title">{movie.title}</span>
+          <span className="poster-year">{movie.year}</span>
+        </div>
+      )}
     </div>
   );
 }
