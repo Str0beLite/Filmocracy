@@ -37,9 +37,9 @@ export function TVFrame() {
         {s.joined && (
           <button
             className="tv-btn tv-btn--ghost tv-btn--sm tv-end"
-            onClick={() => confirm('End movie night for everyone?') && act('end')}
+            onClick={() => confirm('End this session for everyone and go back to the start?') && act('end')}
           >
-            End night
+            End session
           </button>
         )}
         <div className={`curtains ${open ? 'is-open' : ''}`} aria-hidden="true">
