@@ -277,7 +277,8 @@ def test_votes_pull_the_next_recs_before_any_retrain():
     assert all(rank(after, i) < rank(before, i) for i in target[3:])
 
 
-def test_popularity_weight_is_learned_and_old_checkpoints_still_load():
+def test_popularity_weight_is_learned_and_old_checkpoints_still_load(monkeypatch):
+    monkeypatch.setattr(config, "POP_MAX", 1.0)   # uncapped, so the weight can climb
     cat = make_catalog()
     for i, m in enumerate(cat.movies):
         m["popularity"] = i
@@ -298,3 +299,5 @@ def test_popularity_weight_is_learned_and_old_checkpoints_still_load():
     old = from_state(cat.w0, {"A": m.A.detach(), "B": m.B.detach()})   # pre-pop checkpoint
     assert old.pop.item() == pytest.approx(config.POP_INIT)
     assert from_state(cat.w0, state(m)).pop.item() == pytest.approx(m.pop.item())
+    monkeypatch.setattr(config, "POP_MAX", 0.0)   # the default cap: popularity stops counting, however high pop learned
+    assert torch.equal(m.pop_term(prior), torch.zeros_like(prior))

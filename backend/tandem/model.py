@@ -6,7 +6,7 @@ x is the weighted mean embedding of the feed's tags (any tags Muse Spark wrote),
 tags from the database. Both live in the encoder's 384-dim space, so W is 384×384 whatever the tag
 counts are. A starts at zero, so day 0 is W = I: match tags by meaning. A Bᵀ is low rank (~6k params)
 so a handful of users can't wreck it. One more number, pop, weighs each film's popularity prior (catalog.prior), so
-W doesn't have to spend rank on 'people like hits'.
+W doesn't have to spend rank on 'people like hits'; it's capped at POP_MAX so hits can't crowd out niche films.
 """
 import torch
 import torch.nn.functional as F
@@ -30,7 +30,7 @@ class Translator(torch.nn.Module):
         return F.normalize(x @ self.W0.T + (x @ self.B) @ self.A.T, dim=-1)
 
     def pop_term(self, prior):
-        return 0.0 if prior is None else self.pop * prior
+        return 0.0 if prior is None else self.pop.clamp(max=config.POP_MAX) * prior
 
     def reg(self):
         return (self.A @ self.B.T).pow(2).sum()
