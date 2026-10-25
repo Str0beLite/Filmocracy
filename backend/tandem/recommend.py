@@ -5,17 +5,24 @@ import numpy as np
 import torch
 
 from . import config
-from .model import user_scores
+from .model import scores
 
 
 @torch.no_grad()
-def score_feed(model, reel_vecs, movie_vecs):
-    return user_scores(model, torch.from_numpy(reel_vecs.copy()), torch.from_numpy(movie_vecs)).numpy()
+def score_feed(model, x, movie_vecs):
+    return scores(model, torch.from_numpy(x.copy()), torch.from_numpy(movie_vecs)).numpy()
 
 
-def pick(scores, allowed_mask, exclude=(), rng=random):
+@torch.no_grad()
+def because_of(model, x, movie_vec, ig_tags, k=3):
+    """Which of the user's IG tags pushed this film up most: contribution_j = x_j · (W[:, j] · t_m)."""
+    contrib = x * (model.W().numpy().T @ movie_vec)
+    return [ig_tags[j] for j in np.argsort(-contrib)[:k] if contrib[j] > 0]
+
+
+def pick(scores, exclude=(), rng=random):
     """Returns [{idx, rank, explore}], where rank is the position in the pure model ranking."""
-    s = np.where(allowed_mask, scores, -np.inf)
+    s = scores.astype(np.float64).copy()
     if exclude:
         s[list(exclude)] = -np.inf
     order = [int(i) for i in np.argsort(-s) if np.isfinite(s[i])]

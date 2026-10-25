@@ -1,6 +1,10 @@
-"""The trained part: a low-rank translator W = I + A Bᵀ between the frozen encoder and cosine scoring.
+"""The trained part: W maps an Instagram-tag vector to a movie-tag vector.
 
-A starts at zero, so an untrained Translator returns exactly the zero-shot ranking.
+    ŷ = normalize(W x),   W = W0 + A Bᵀ,   score(m) = ŷ · t_m
+
+x is the user's IG tag vector, t_m is a movie's (centred, unit) tag vector from the database, and
+W0 is a prior built from tag names so day 0 already works. A starts at zero, so an untrained
+Translator is exactly W0. A Bᵀ is low rank (~10k params) so a handful of users can't wreck it.
 """
 import torch
 import torch.nn.functional as F
@@ -9,56 +13,76 @@ from . import config
 
 
 class Translator(torch.nn.Module):
-    def __init__(self, d=config.DIM, rank=config.RANK):
+    def __init__(self, w0, rank=config.RANK):
         super().__init__()
-        self.A = torch.nn.Parameter(torch.zeros(d, rank))
-        self.B = torch.nn.Parameter(torch.randn(d, rank) * 0.01)
+        self.register_buffer("W0", torch.as_tensor(w0, dtype=torch.float32))
+        n_out, n_in = self.W0.shape
+        self.A = torch.nn.Parameter(torch.zeros(n_out, rank))
+        self.B = torch.nn.Parameter(torch.randn(n_in, rank) * 0.01)
 
-    def forward(self, r):                       # r: (n_reels, d)
-        return F.normalize(r + (r @ self.B) @ self.A.T, dim=-1)
+    def W(self):
+        return self.W0 + self.A @ self.B.T
+
+    def forward(self, x):                       # x: (..., n_ig) -> predicted film taste (..., n_movie_tags)
+        return F.normalize(x @ self.W0.T + (x @ self.B) @ self.A.T, dim=-1)
 
     def reg(self):
         return (self.A @ self.B.T).pow(2).sum()
 
 
-def user_scores(model, reels, movies, tau=config.TAU):
-    """s(u, m) = τ · logsumexp_i(cos(W rᵢ, m) / τ): a soft max over reels, so one strong facet can carry a match."""
-    sims = model(reels) @ movies.T              # (n_reels, n_movies)
-    return tau * torch.logsumexp(sims / tau, dim=0)
+def scores(model, x, movies):
+    """Cosine between the predicted film taste and every movie's tag vector."""
+    return model(x) @ movies.T
 
 
-def loss_fn(model, feeds, examples, movies, tau=config.TAU, lam=config.LAMBDA, hard_w=config.HARD_NEG_WEIGHT):
+def taste_target(movies, pos, neg):
+    """The user's 'trained film taste': mean tag vector of films they love, nudged away from ones they don't."""
+    y = movies[sorted(pos)].mean(0)
+    if neg:
+        y = y - 0.5 * movies[sorted(neg)].mean(0)
+    return F.normalize(y, dim=-1)
+
+
+def loss_fn(model, feeds, examples, movies, tau=config.TAU, beta=config.BETA, lam=config.LAMBDA,
+            hard_w=config.HARD_NEG_WEIGHT):
     """
-    feeds:    {feed_id: {"reels": (n, d) tensor, "pos": set(idx), "neg": set(idx)}}
-    examples: [(feed_id, positive_idx)]
-    InfoNCE over the whole catalog: every other movie is a negative for free. Thumbs-downs are hard
-    negatives (up-weighted in the softmax) and also get an unlikelihood term so feeds with only
-    thumbs-downs still teach something.
+    feeds:    {feed_id: {"x": (n_ig,) tensor, "pos": set(idx), "neg": set(idx)}}
+    examples: [(feed_id, positive_idx)]   (the training positives; held-out ones are left out)
+
+    Three terms:
+      1. taste:   1 - cos(W x, y_u)  — land on the user's film-taste vector from their IG vector alone.
+      2. ranking: InfoNCE over the whole catalog — loved films above every other film. Thumbs-downs are
+                  hard negatives (up-weighted) plus an unlikelihood term.
+      3. λ‖A Bᵀ‖² — stay near the prior where there's no data.
     """
     log_hard = torch.log(torch.tensor(hard_w))
-    ce_terms, unlike_terms = [], []
+    by_feed = {}
+    for fid, j in examples:
+        by_feed.setdefault(fid, []).append(j)
+    taste_terms, ce_terms, unlike_terms = [], [], []
     for fid, f in feeds.items():
-        mine = [j for g, j in examples if g == fid]
+        mine = by_feed.get(fid, [])
         if not mine and not f["neg"]:
             continue
-        logits = user_scores(model, f["reels"], movies, tau) / tau
+        pred = model(f["x"])
+        logits = (pred @ movies.T) / tau
         neg = torch.tensor(sorted(f["neg"]), dtype=torch.long)
-        boosted = logits.clone()
-        if len(neg):
-            boosted[neg] = boosted[neg] + log_hard
-        for j in mine:
-            others = [p for p in f["pos"] if p != j]
-            row = boosted.clone()
-            if others:                           # don't punish the model for scoring other loves highly
-                row[torch.tensor(others)] = float("-inf")
-            ce_terms.append(F.cross_entropy(row[None], torch.tensor([j])))
+        if mine:
+            taste_terms.append(1 - pred @ taste_target(movies, set(mine), f["neg"]))
+            boosted = logits.clone()
+            if len(neg):
+                boosted[neg] = boosted[neg] + log_hard
+            for j in mine:
+                row = boosted.clone()
+                others = [p for p in f["pos"] if p != j]
+                if others:                       # don't punish the model for scoring other loves highly
+                    row[torch.tensor(others)] = float("-inf")
+                ce_terms.append(F.cross_entropy(row[None], torch.tensor([j])))
         if len(neg):
             p_neg = F.softmax(logits, dim=0)[neg]
             unlike_terms.append(-torch.log1p(-p_neg.clamp(max=1 - 1e-6)).mean())
-    zero = torch.zeros(())
-    ce = torch.stack(ce_terms).mean() if ce_terms else zero
-    unlike = torch.stack(unlike_terms).mean() if unlike_terms else zero
-    return ce + 0.5 * unlike + lam * model.reg()
+    mean = lambda ts: torch.stack(ts).mean() if ts else torch.zeros(())
+    return beta * mean(taste_terms) + mean(ce_terms) + 0.5 * mean(unlike_terms) + lam * model.reg()
 
 
 @torch.no_grad()
@@ -66,11 +90,10 @@ def recall_at_k(model, feeds, examples, movies, k=config.RECALL_K):
     """Fraction of held-out (feed, loved film) pairs where the film lands in the top k."""
     if not examples:
         return None
-    hits = 0
-    cache = {}
+    hits, cache = 0, {}
     for fid, j in examples:
         if fid not in cache:
-            cache[fid] = user_scores(model, feeds[fid]["reels"], movies)
+            cache[fid] = scores(model, feeds[fid]["x"], movies)
         s = cache[fid]
         hits += int((s > s[j]).sum().item() < k)
     return hits / len(examples)
@@ -80,8 +103,8 @@ def state(model):
     return {"A": model.A.detach().clone(), "B": model.B.detach().clone()}
 
 
-def from_state(st):
-    m = Translator(d=st["A"].shape[0], rank=st["A"].shape[1])
+def from_state(w0, st):
+    m = Translator(w0, rank=st["A"].shape[1])
     with torch.no_grad():
         m.A.copy_(st["A"])
         m.B.copy_(st["B"])

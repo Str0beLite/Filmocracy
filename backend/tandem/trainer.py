@@ -1,6 +1,6 @@
 """Live training loop: retrain W on the whole replay buffer, gate on held-out recall, hot-swap.
 
-Runs in a background thread inside the API process. W has ~6k parameters, so a retrain over a few
+Runs in a background thread inside the API process. The trained part of W is ~10k parameters, so a retrain over a few
 hundred events takes seconds on CPU and needs no GPU or separate worker.
 """
 import math
@@ -17,8 +17,9 @@ class Trainer:
     def __init__(self, store, catalog):
         self.store = store
         self.movies = torch.from_numpy(catalog.vecs)
+        self.w0 = catalog.w0
         self.version = 0
-        self.model = Translator()            # version 0 = identity = zero-shot
+        self.model = Translator(self.w0)     # version 0 = the prior W0, no training yet
         self.model.eval()
         self._load_latest()
         self._pending = 0
@@ -30,7 +31,7 @@ class Trainer:
     def _load_latest(self):
         row = self.store.latest_accepted()
         if row:
-            self.model = from_state(torch.load(row["path"]))
+            self.model = from_state(self.w0, torch.load(row["path"]))
             self.model.eval()
             self.version = row["version"]
 
@@ -62,12 +63,12 @@ class Trainer:
     # data
     def build_dataset(self):
         events = self.store.events()
-        feed_vecs = self.store.all_feed_vecs()
+        feed_vecs = self.store.all_feed_vectors()
         feeds, positives = {}, []
         for e in events:
             if e["feed_id"] not in feed_vecs:
                 continue
-            f = feeds.setdefault(e["feed_id"], {"reels": torch.from_numpy(feed_vecs[e["feed_id"]].copy()),
+            f = feeds.setdefault(e["feed_id"], {"x": torch.from_numpy(feed_vecs[e["feed_id"]].copy()),
                                                 "pos": set(), "neg": set()})
             if e["label"] in config.POSITIVE_LABELS:
                 f["pos"].add(e["movie_idx"])
@@ -92,7 +93,7 @@ class Trainer:
             if not train and not any(f["neg"] for f in feeds.values()):
                 return None
 
-            cand = from_state(state(self.model))   # warm start from the live W
+            cand = from_state(self.w0, state(self.model))   # warm start from the live W
             cand.train()
             opt = torch.optim.Adam(cand.parameters(), lr=config.LR)
             t0 = time.time()

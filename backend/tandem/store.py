@@ -11,7 +11,7 @@ from . import config
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS feeds (
-  id TEXT PRIMARY KEY, user TEXT, created REAL, profiles TEXT, vecs BLOB
+  id TEXT PRIMARY KEY, user TEXT, created REAL, tags TEXT, x BLOB
 );
 CREATE TABLE IF NOT EXISTS recs (
   id INTEGER PRIMARY KEY, feed_id TEXT, movie_idx INT, rank INT, explore INT, w_version INT, created REAL
@@ -47,10 +47,11 @@ class Store:
             return [dict(r) for r in self.db.execute(sql, args).fetchall()]
 
     # feeds
-    def add_feed(self, user, profiles, vecs):
+    def add_feed(self, user, tags, x):
+        """tags: {ig_tag: weight} as the vision model read them; x: the IG vector built from them."""
         fid = uuid.uuid4().hex[:12]
         self._exec("INSERT INTO feeds VALUES (?,?,?,?,?)",
-                   (fid, user, time.time(), json.dumps(profiles), vecs.astype(np.float32).tobytes()))
+                   (fid, user, time.time(), json.dumps(tags), x.astype(np.float32).tobytes()))
         return fid
 
     def get_feed(self, fid):
@@ -58,13 +59,13 @@ class Store:
         if not rows:
             return None
         r = rows[0]
-        r["profiles"] = json.loads(r["profiles"])
-        r["vecs"] = np.frombuffer(r["vecs"], dtype=np.float32).reshape(-1, config.DIM)
+        r["tags"] = json.loads(r["tags"])
+        r["x"] = np.frombuffer(r["x"], dtype=np.float32)
         return r
 
-    def all_feed_vecs(self):
-        rows = self._all("SELECT id, vecs FROM feeds")
-        return {r["id"]: np.frombuffer(r["vecs"], dtype=np.float32).reshape(-1, config.DIM) for r in rows}
+    def all_feed_vectors(self):
+        rows = self._all("SELECT id, x FROM feeds")
+        return {r["id"]: np.frombuffer(r["x"], dtype=np.float32) for r in rows}
 
     # recs + events
     def add_recs(self, fid, items, w_version):

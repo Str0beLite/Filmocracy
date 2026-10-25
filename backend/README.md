@@ -1,17 +1,21 @@
 # Backend
 
-A FastAPI service that turns a reels feed into 10 film recommendations and keeps learning from the thumbs up and thumbs down people give. One process does all of it: serving, the SQLite event log, and a background thread that retrains the translator W.
+A FastAPI service that turns screenshots of someone's Instagram feed into 10 film recommendations, and keeps learning from the thumbs up and thumbs down people give. One process does all of it: serving, the SQLite event log, and a background thread that retrains W.
 
 ## How it works
 
-1. **Taste profiles.** Claude (`claude-haiku-5-5`) rewrites each reel screenshot or caption, and each movie, into the same schema: mood, themes, aesthetic, pacing, setting, who loves this. Ads get flagged and dropped.
-2. **Frozen encoder.** `BAAI/bge-small-en-v1.5` turns each profile into a 384-number vector. It is never trained.
-3. **Translator W = I + ABᵀ** (rank 8, about 6k parameters). A starts at 0, so on day 0 W is the identity and you get pure zero-shot matching.
-4. **Score.** `s(u, m) = τ · logsumexp_i(cos(W rᵢ, m) / τ)`. This is a soft max over reels, so one strong facet of your feed can carry a match on its own.
-5. **Serve 10.** The top 8 by score, plus 2 exploration picks drawn at random from ranks 11–50.
-6. **Learn live.** Every ~20 feedback events, the trainer warm-starts from the current W and runs 100 Adam steps on the *whole* buffer, using InfoNCE over the full catalog with thumbs-downs as hard negatives. It then checks recall@50 on a held-out set (hidden favourites plus the newest 10% of loves). The new W is hot-swapped in only if it scores at least as well as the current one.
+1. **Instagram vector x.** A Meta Llama vision model reads each feed screenshot and tags it from a fixed IG vocabulary (`catalog/ig_tags.json`, 132 tags), each with a weight from 0 to 1. Ads get flagged and dropped. Screenshots are averaged into one unit vector x. This is the only LLM step.
+2. **Movie vectors tₘ.** Every film's row in the tag database (for example, MovieLens tag genome relevance scores), centred per tag and normalised.
+3. **Translate.** ŷ = normalize(W x), with W = W0 + ABᵀ (movie tags × IG tags). W0 is a day-0 guess built from tag names plus hand-picked links in `catalog/prior_map.json`. A starts at 0, so before any training W is exactly W0. ABᵀ is low rank (8), so a few users can't wreck it.
+4. **Score.** score(m) = ŷ · tₘ. Serve the top 8, plus 2 exploration picks drawn at random from ranks 11–50. Each rec says which of your IG tags pushed it up (`because_of`).
+5. **Learn live.** Every ~20 feedback events, the trainer warm-starts from the current W and runs 100 Adam steps over the *whole* buffer, minimising three terms:
+   - **taste:** 1 − cos(W x, yᵤ), where yᵤ is the mean tag vector of the films that user loves (nudged away from ones they passed on). This is "reach their film taste from their Instagram taste alone".
+   - **ranking:** InfoNCE over the full catalog, so loved films beat every other film. Thumbs-downs are hard negatives.
+   - **λ‖ABᵀ‖²:** stays near W0 wherever there's no data.
 
-Code map: `tandem/model.py` (W, scoring, loss), `tandem/trainer.py` (loop, gate, hot-swap), `tandem/api.py` (endpoints), `tandem/profiles.py` (Claude), `tandem/store.py` (SQLite).
+   The trainer then checks recall@50 on a held-out set (hidden favourites plus the newest 10% of loves). The new W is hot-swapped in only if it scores at least as well. Because W is shared, each new user's feedback improves the mapping for the next person with a similar feed.
+
+Code map: `tandem/model.py` (W, loss), `tandem/trainer.py` (loop, gate, hot-swap), `tandem/vision.py` (Llama), `tandem/api.py` (endpoints), `tandem/catalog.py` (tag spaces), `tandem/store.py` (SQLite).
 
 ## Setup
 
@@ -20,43 +24,52 @@ cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...
+export LLAMA_API_KEY=...        # Meta Llama API key (llama.developer.meta.com)
 ```
 
-### Build the movie catalog (once, on your laptop)
+The vision call goes to any OpenAI-compatible endpoint. Defaults: `LLAMA_BASE_URL=https://api.llama.com/compat/v1/`, `LLAMA_MODEL=Llama-4-Maverick-17B-128E-Instruct-FP8`. To use the same Llama models elsewhere, point those at Together or Groq, or run Ollama locally with `llama3.2-vision`.
 
-Download `tmdb_5000_movies.csv` from Kaggle ("TMDB 5000 Movie Dataset"), then run:
+### Build the catalog (once, on your laptop)
+
+With the MovieLens tag genome (`ml-32m` or `ml-25m`, unzipped):
 
 ```bash
-python scripts/build_catalog.py --csv ~/Downloads/tmdb_5000_movies.csv
+python scripts/build_catalog.py --genome-dir ~/Downloads/ml-32m --top 5000
 ```
 
-This writes about 4.8k Haiku taste profiles (cached in `catalog/profiles.jsonl`, and a crashed run resumes where it stopped) and embeds them. Commit `catalog/movies.json`, `catalog/movie_vecs.npy` and `catalog/profiles.jsonl`. Use `--no-llm` for a free, rougher catalog built from raw metadata.
+With any other tag database, export one long CSV with columns `movie_id,title,tag,weight` (`year` optional):
+
+```bash
+python scripts/build_catalog.py --tags-csv our_movie_tags.csv
+```
+
+The script prints which IG tags have no day-0 mapping. Add links for the important ones to `catalog/prior_map.json` and rerun, or let training learn them. Then commit `catalog/`.
 
 ### Run
 
 ```bash
 uvicorn tandem.api:app --reload
-pytest -q            # uses a fake encoder + synthetic catalog, no key needed
+pytest -q            # synthetic catalog, no key needed
 ```
 
 ## API
 
 | Method | Path | What it does |
 |---|---|---|
-| `GET` | `/health` | Current W version, number of events, whether an LLM key is set |
-| `POST` | `/feeds` | Multipart: `files` (reel screenshots), `captions` (newline-separated or a JSON list), `user`. Returns `feed_id` and the reel profiles |
+| `GET` | `/health` | Current W version, vocabulary sizes, event count, whether the vision key is set |
+| `GET` | `/ig-tags` | The IG vocabulary |
+| `POST` | `/feeds` | Multipart: `files` (feed screenshots), optional `tags` (JSON `{ig_tag: weight}`, handy for testing without a key), `user`. Returns `feed_id` and the IG tags it read |
 | `POST` | `/feeds/{id}/favourites` | `{"titles": [...], "holdout_frac": 0.3}` seeds known loves, with a share hidden for the recall check |
-| `GET` | `/feeds/{id}/recs` | 10 films, each with `rec_id`, profile and `because_of_reel` |
-| `POST` | `/feedback` | `{"rec_id": 12, "label": "love" \| "seen_loved" \| "nah"}`, or `feed_id` + `movie_id` (TMDB id) instead of `rec_id` |
+| `GET` | `/feeds/{id}/recs` | 10 films, each with `rec_id`, top movie tags, `tmdb_id` (for posters) and `because_of` |
+| `POST` | `/feedback` | `{"rec_id": 12, "label": "love" \| "seen_loved" \| "nah"}`, or `feed_id` + `movie_id` instead of `rec_id` |
 | `POST` | `/admin/retrain` | Run a training round now (handy on stage) |
 | `GET` | `/model` | Every round's recall before and after, plus accepted or rejected, for the live demo chart |
 | `GET` | `/movies/search?q=` | Title search, for a favourites picker |
 
-Quick try with captions only:
+Try it without a key:
 
 ```bash
-curl -F user=ryan -F $'captions=late night tokyo walk, neon rain\nold man fixing watches, slow and quiet' localhost:8000/feeds
+curl -F 'tags={"dark humor":1,"night drives":0.7,"gym":0.4}' localhost:8000/feeds
 curl localhost:8000/feeds/<feed_id>/recs
 ```
 
@@ -64,7 +77,7 @@ curl localhost:8000/feeds/<feed_id>/recs
 
 1. New project → Deploy from GitHub → this repo. In service settings, set **Root Directory** to `backend`. Railway picks up `Dockerfile` and `railway.json`.
 2. Add a **Volume** mounted at `/data`. The SQLite log and W checkpoints live there and survive redeploys.
-3. Variables: `ANTHROPIC_API_KEY`.
+3. Variables: `LLAMA_API_KEY` (plus `LLAMA_BASE_URL` / `LLAMA_MODEL` if you're not on Meta's API).
 4. Generate a public domain and point the frontend at it.
 
 Hugging Face Spaces (Docker, free CPU) also works, but its disk is wiped on restart, so the training log would vanish.
@@ -73,10 +86,10 @@ Hugging Face Spaces (Docker, free CPU) also works, but its disk is wiped on rest
 
 | Var | Default | |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | none | Needed for screenshots and for good profiles |
+| `LLAMA_API_KEY` | none | Needed for screenshots |
+| `LLAMA_BASE_URL`, `LLAMA_MODEL` | Meta Llama API, Llama 4 Maverick | Any OpenAI-compatible vision endpoint |
 | `TANDEM_DATA_DIR` | `backend/data` (`/data` in Docker) | SQLite + checkpoints |
 | `TANDEM_RETRAIN_EVERY` | 20 | Feedback events between rounds |
-| `TANDEM_MIN_VOTES` | 500 | Don't recommend films with fewer TMDB votes |
-| `TANDEM_FAKE_ENCODER` | 0 | 1 = hashing encoder (tests and offline dev) |
+| `TANDEM_BETA` | 1.0 | Weight of the taste-vector term vs the ranking term |
 
 All other knobs (rank, τ, λ, learning rate, steps) are in `tandem/config.py`.
