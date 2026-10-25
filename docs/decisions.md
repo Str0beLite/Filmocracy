@@ -42,3 +42,5 @@ One line each: date, decision, why.
 - 2026-10-25: Dev-only `GET /dev/feeds/{fid}/top` (TANDEM_DEV_AUTH=1) + `scripts/vision_demo.html` for testing screenshots → tags → top 5, scored with untrained W = I plus a 0.05 × popularity-percentile² nudge.
 
 - 2026-10-25: Merge main 89a01f0 into deployment preparation, retaining personality-first tags and whole-feed summary/fallback, minimal reasoning and the dev-only preview alongside unified authentication, SQLite sessions and WebSockets.
+
+- 2026-10-25: Prepare watchtandem.tech for Cloudflare Pages and api.watchtandem.tech for Railway with exact-origin CORS, GIS ID tokens and a persistent /data volume; wait for the teammate app branch to replace its mock API before frontend deployment.

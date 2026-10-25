@@ -1,3 +1,5 @@
+> **watchtandem.tech deployment:** See [the production guide](production-deployment.md) for Railway, Cloudflare Pages, custom domains, Google configuration and the frontend completion blocker.
+
 # Railway deployment handoff
 
 Prepared 2026-10-25. Nothing has been pushed or deployed. Use the existing Dockerfile;
@@ -211,4 +213,4 @@ neither the key nor image contents were logged. This verifies endpoint/model acc
 and the request/response contract. Real Instagram screenshot quality, production
 quota/load and Railway connectivity still require post-deployment checks.
 
-Main update `89a01f0` changes the default to minimal reasoning and adds one text-only whole-feed summary after tile reads. Failed summaries fall back to the plain average. The earlier live test covered low-reasoning tile extraction; the new summary pass has mock/regression coverage and still needs live quality acceptance. The `/dev/feeds/{id}/top` preview and vision demo are development-only; production Railway keeps development auth disabled.
+Main update `89a01f0` changes the default to minimal reasoning and adds one text-only whole-feed summary after tile reads. Failed summaries fall back to the plain average. The current minimal-reasoning flow passed a live synthetic-image and whole-feed summary probe; real Instagram quality still needs acceptance. The `/dev/feeds/{id}/top` preview and vision demo are development-only; production Railway keeps development auth disabled.

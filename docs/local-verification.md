@@ -190,3 +190,40 @@ No retries, personal screenshots, database writes or model training were involve
 API credentials and image contents were not logged. This supersedes the earlier
 missing-credential limitation for live inference. Actual Instagram screenshot
 quality and Railway/provider load remain acceptance checks.
+
+## watchtandem.tech production preparation (2026-10-25)
+
+- Finished the main update through `89a01f0` on the deployment branch. Main's new
+  personality prompt, minimal reasoning, whole-feed summary/fallback and dev-only
+  vision preview are retained; unified auth/session protections remain intact.
+- Final native backend suite: **42 passed**. Final Docker backend suite: **42 passed**.
+  The added production tests cover the exact `https://watchtandem.tech` CORS origin,
+  HTTP/socket Google-verifier client-ID wiring and ownership, and refusing fake
+  encoding on Railway. Google signature verification is a test double in those
+  tests; they are not real GIS browser sign-in evidence.
+- **4 frontend helper tests passed**. No complete frontend is in the current/local
+  branches. Remote `app` (`fcaaa14`) has the teammate's Vite UI draft, still using
+  a mock API, fake sign-in and dev-server SSE. Per instruction, it was inspected
+  read-only and frontend work/builds are deferred until the teammate finishes it.
+- Docker image `tandem-watchtandem-check:20261025` built successfully (Linux ARM64).
+  Digest: `sha256:6a8f0390bf742155660138c5ad402f34aef191b88c2e744168227f0a03844c79`.
+- A new empty persistent volume created all 18 tables and all 5,000 canonical movies.
+  All 10 API pages were retrieved with 5,000 unique IDs. Full table hashes matched
+  across container replacement, including test profiles/votes and deliberate test
+  metadata edits. Existing local SQLite files were unchanged; disposable resources
+  were removed. The bundled catalog and checkpoint were not changed or trained.
+- Local HTTPS/WSS verification used an ephemeral self-signed certificate explicitly
+  trusted by the test client (certificate checking stayed enabled). The app accepted
+  browser origin `https://watchtandem.tech`, rejected an unrelated socket origin,
+  delivered three simultaneous votes with exactly one advancement, and synchronized
+  after WSS reconnection. The test listened on PORT 8123. Identities were local dev
+  identities; this was not a public DNS/certificate or real Google-login test.
+- The isolated session workflow used live YouTube trailer verification successfully.
+  Live Muse's current minimal-reasoning flow also passed: two synthetic-image
+  requests, one text-only summary, 11 parsed summary tags, zero dropped images. No
+  retries, actual screenshots, credentials or image contents were logged. Real
+  Instagram interpretation and production account quota still need acceptance.
+
+Railway resources, Cloudflare Pages/DNS, public certificates and Google console
+settings have not been changed. Follow [production-deployment.md](production-deployment.md)
+for the exact manual configuration and outstanding acceptance checklist.
