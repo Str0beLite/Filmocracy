@@ -101,8 +101,26 @@ async def playable(row):
     return True
 
 
+def test_queue_rescores_the_unshown_films_with_the_latest_votes(setup, monkeypatch):
+    factory, store, clock = setup
+    with TestClient(factory()) as c:
+        monkeypatch.setattr(c.app.state.integration, "playable", playable)
+        sid = lobby(c)["session_id"]
+        assert post(c, f"/sessions/{sid}/queue").json()["added"] == config.SESSION_BATCH
+        rid = post(c, f"/sessions/{sid}/control", json={"action": "start"}).json()["round_id"]
+        for user in ("a", "b", "c"):
+            post(c, f"/sessions/{sid}/votes", user, json={"round_id": rid, "value": 1})
+        assert store.count_events() == 0   # the 10 s sync loop hasn't run yet
+        post(c, f"/sessions/{sid}/queue")
+        assert store.count_events() == 3   # the queue copied this round's votes in before re-picking
+        movies = get(c, f"/sessions/{sid}").json()["session_movies"]
+        unshown = [m["movie_id"] for m in movies if not m["shown_at"]]
+        assert len(unshown) == config.SESSION_BATCH and len({m["movie_id"] for m in movies}) == len(movies)
+
+
 def test_real_sqlite_tv_three_phones_concurrent_votes_and_controls(setup, monkeypatch):
     factory, store, clock = setup
+    monkeypatch.setattr(config, "SESSION_BATCH", 10)   # one queue call covers every round below
     with TestClient(factory()) as c:
         monkeypatch.setattr(c.app.state.integration, "playable", playable)
         assert c.post("/sessions", json={"display_name": "TV"}).status_code == 401
@@ -576,3 +594,24 @@ def test_live_room_stage_feelings_and_reactions(setup):
         assert state["server_now"]
         clock.now += 60   # reactions are short-lived
         assert get(c, f"/sessions/{sid}", "c").json()["reactions"] == []
+
+
+def test_account_favourites_and_delete(setup):
+    factory, store, _ = setup
+    with TestClient(factory()) as c:
+        h = {"Authorization": "Bearer d"}
+        assert post(c, "/me/favourites", "a", json={"movie_ids": [50]}).status_code == 409
+        sid = lobby(c)["session_id"]
+        post(c, "/feeds", "a", data={"tags": '{"tag 2":1}'})  # a newer feed; favourites follow the person
+        assert post(c, "/me/favourites", "a", json={"movie_ids": [50, 51]}).json()["missing"] == []
+        assert [m["id"] for m in get(c, "/me/favourites", "a").json()] == [51, 50]
+        assert c.delete("/me/favourites/50", headers={"Authorization": "Bearer a"}).status_code == 200
+        assert [m["id"] for m in get(c, "/me/favourites", "a").json()] == [51]
+        assert get(c, "/me/favourites", "b").json() == []
+        assert c.delete("/me", headers={"Authorization": "Bearer a"}).json() == {"ok": True}
+        assert get(c, "/me", "a").json()["feed_id"] is None
+        assert get(c, "/me/favourites", "a").json() == []
+        assert get(c, "/profiles/me", "a").json()["display_name"] == "Guest"
+        assert "a" not in get(c, f"/sessions/{sid}", "b").json()["session_feeds"]
+        assert get(c, "/me", "b").json()["feed_id"] is not None
+        assert c.delete("/me", headers=h).status_code == 401

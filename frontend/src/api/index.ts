@@ -433,7 +433,11 @@ if (device() === 'tv') setInterval(direct, 250);
 async function next() {
   if (busy) return;
   const open = openRound();
-  if (open) return publish(trailerFor(open));
+  if (open) {
+    // The backend opened this one when voting closed; re-pick the rest with the votes so far.
+    http(`/sessions/${sessionId}/queue`, {}).catch(() => {});
+    return publish(trailerFor(open));
+  }
   busy = true;
   try {
     const queued = state!.session_movies.some((m) => !m.shown_at);

@@ -199,6 +199,11 @@ def update_profile(body: CreateSession, request: Request, user=Depends(current_u
     return request.app.state.sessions.update_profile(user, body.display_name)
 
 
+@router.delete("/me")
+def delete_account(request: Request, user=Depends(current_user)):
+    return request.app.state.sessions.delete_account(user)
+
+
 @router.post("/sessions", response_model=SessionCreated)
 def create(body: CreateSession, request: Request, user=Depends(current_user)):
     return request.app.state.sessions.create(user, body.display_name)

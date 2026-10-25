@@ -7,10 +7,13 @@ import { TVFrame } from './tv/TVFrame';
 import * as TV from './tv/screens';
 import { PhoneFrame } from './phone/PhoneFrame';
 import * as Phone from './phone/screens';
+import { PhoneAccount } from './phone/account';
 import { Training } from './training/Training';
 
 export const router = createBrowserRouter([
   { path: '/training', element: <Training /> },
+  // Outside /phone's frame, so the room never redirects away from it.
+  { path: '/phone/account', element: <PhoneAccount /> },
   import.meta.env.DEV ? { path: '/', element: <DevIndex /> } : { path: '/', loader: () => redirect('/tv') },
   {
     path: '/tv',

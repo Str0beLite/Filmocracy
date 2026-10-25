@@ -22,3 +22,11 @@ export function token(): string {
   store.setItem(key, value);
   return value;
 }
+
+// Log out: this phone gets a fresh id next time. There's no password, so the old account is gone from here.
+export function forget() {
+  for (const key of ['tandem.guest.token', 'tandem.device-user.phone']) localStorage.removeItem(key);
+  for (const key of ['tandem.guest.token', 'tandem.device-user.phone', 'tandem-me', 'tandem-votes', 'tandem.phone.invite']) {
+    sessionStorage.removeItem(key);
+  }
+}

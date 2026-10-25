@@ -104,6 +104,16 @@ class Store:
         return ({r["movie_idx"] for r in rows if r["label"] in config.POSITIVE_LABELS},
                 {r["movie_idx"] for r in rows if r["label"] in config.NEGATIVE_LABELS})
 
+    def favourites(self, user):
+        """Films a person saved as favourites, across all their feeds, newest first."""
+        rows = self._all("SELECT e.movie_idx FROM events e JOIN feeds f ON f.id=e.feed_id "
+                         "WHERE f.user=? AND e.label='favourite' ORDER BY e.created DESC, e.id DESC", (user,))
+        return list(dict.fromkeys(r["movie_idx"] for r in rows))
+
+    def remove_favourite(self, user, movie_idx):
+        self._exec("DELETE FROM events WHERE label='favourite' AND movie_idx=? AND feed_id IN "
+                   "(SELECT id FROM feeds WHERE user=?)", (movie_idx, user))
+
     def count_events(self):
         return self._all("SELECT COUNT(*) AS n FROM events")[0]["n"]
 

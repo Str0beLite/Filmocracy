@@ -15,6 +15,7 @@ import {
   SmilePlus,
   Sparkles,
   Star,
+  UserRound,
   Vote,
   X,
 } from 'lucide-react';
@@ -34,8 +35,19 @@ function Top() {
   return (
     <header className="ps-top">
       <Wordmark />
-      <LivePill>Room {s.code}</LivePill>
+      <span className="ps-top-end">
+        <LivePill>Room {s.code}</LivePill>
+        <AccountLink />
+      </span>
     </header>
+  );
+}
+
+function AccountLink() {
+  return (
+    <Link className="icon-btn" to="/phone/account" aria-label="Your account">
+      <UserRound aria-hidden="true" />
+    </Link>
   );
 }
 
@@ -74,6 +86,7 @@ export function PhoneJoin() {
     <section className="ps">
       <header className="ps-top">
         <Wordmark />
+        <AccountLink />
       </header>
       {invite ? (
         <>
