@@ -194,6 +194,13 @@ export function TVTrailer() {
       ) : (
         <Scene film={film} progress={progress} paused={paused} />
       )}
+      {/* Clicking the picture pauses or plays too; the Pause button is the keyboard route. */}
+      <button
+        className="scene-toggle"
+        aria-label={paused ? 'Play trailer' : 'Pause trailer'}
+        tabIndex={-1}
+        onClick={() => act(paused ? 'resumeTrailer' : 'pauseTrailer').catch(() => {})}
+      />
       <div className="letterbox letterbox--top" />
       <div className="letterbox letterbox--bottom" />
       <CompletionStatus value={completion(s)} className="tv-hud" />
