@@ -76,3 +76,4 @@ One line each: date, decision, why.
 - 2026-10-25: Remove Google sign-in from the frontend; per-tab 256-bit guest bearer keys map to separate hashed public user IDs, preserving ownership and WebSocket authorization without schema changes or relinking existing Google profiles.
 
 - 2026-10-25: Integrate the local individual trainer with Filmocracy main cdfc83a, retaining self-hosting, persistent browser IDs and optional YouTube verification; route both direct feedback and synced session votes to the opt-in existing trainer, preserving prior guest identities and catalog/checkpoint data.
+- 2026-10-25: /training renders the app's onboarding screens (name, feeling, screenshots, reading) from shared components in `frontend/src/phone/onboarding.tsx`, so the two can't drift; only its header and the trailer/vote loop are its own.
