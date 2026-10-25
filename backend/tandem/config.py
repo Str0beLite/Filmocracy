@@ -54,7 +54,7 @@ POSITIVE_LABELS = {"love", "seen_loved", "favourite"}
 NEGATIVE_LABELS = {"nah", "seen_disliked"}
 TAG_BOOST = _env("TANDEM_TAG_BOOST", 0.3, float)   # added to films carrying a boosted tag (each voter's feeling, or the host's): 0.3 -> ~85-100% of one person's picks fit their mood
 POP_INIT = _env("TANDEM_POP_INIT", 0.05, float)     # starting weight on the popularity prior; training learns it from there
-POP_MAX = _env("TANDEM_POP_MAX", -2.0, float)      # cap on that weight: training kept raising it until hits filled the recs; -2 pushes films everyone has seen down
+POP_MAX = _env("TANDEM_POP_MAX", -0.5, float)      # cap on that weight: training kept raising it until hits filled the recs; negative pushes films everyone has seen down
 VOTE_PULL = _env("TANDEM_VOTE_PULL", 0.1, float)    # each vote (up to 10) pulls the taste this far toward loved films, before any retrain
 
 # Admin endpoints need X-Admin-Token.

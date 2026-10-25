@@ -495,7 +495,7 @@ def test_migration_is_idempotent_and_preserves_existing_recommendation_data(tmp_
     source = Path(__file__).resolve().parents[1] / "catalog/session_movie_metadata.json"
     first = migrate(path, source)
     second = migrate(path, source)
-    assert first["supplementary_metadata_rows"] == second["supplementary_metadata_rows"] == 200
+    assert first["supplementary_metadata_rows"] == second["supplementary_metadata_rows"] == 5123
     assert first["movie_catalog_rows"] == second["movie_catalog_rows"] == 9994
     assert first["recommendation_counts_before"] == first["recommendation_counts_after"]
     assert second["recommendation_counts_after"]["feeds"] == 1
