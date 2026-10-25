@@ -4,18 +4,20 @@ A FastAPI service that turns screenshots of someone's Instagram feed into 10 fil
 
 ## How it works
 
-1. **Instagram vector x.** A Meta Llama vision model reads each feed screenshot and tags it from a fixed IG vocabulary (`catalog/ig_tags.json`, 132 tags), each with a weight from 0 to 1. Ads get flagged and dropped. Screenshots are averaged into one unit vector x. This is the only LLM step.
-2. **Movie vectors tₘ.** Every film's row in the tag database (for example, MovieLens tag genome relevance scores), centred per tag and normalised.
-3. **Translate.** ŷ = normalize(W x), with W = W0 + ABᵀ (movie tags × IG tags). W0 is a day-0 guess built from tag names plus hand-picked links in `catalog/prior_map.json`. A starts at 0, so before any training W is exactly W0. ABᵀ is low rank (8), so a few users can't wreck it.
-4. **Score.** score(m) = ŷ · tₘ. Serve the top 8, plus 2 exploration picks drawn at random from ranks 11–50. Each rec says which of your IG tags pushed it up (`because_of`).
+Neither side has a fixed tag list. Every tag string is turned into a vector by a frozen text encoder (`BAAI/bge-small-en-v1.5`, a small sentence model on CPU, not an LLM), so a bag of tags of any size becomes one 384-number vector.
+
+1. **Feed vector x.** A Meta Llama vision model reads each feed screenshot and writes 5–15 free-form tags with weights from 0 to 1, covering what it shows ("street food", "deadlift") and how it feels ("chaotic energy", "dark humor"). Ads get flagged and dropped. Then x = normalize(Σ wᵢ · E(tagᵢ)) over all the screenshots' tags. This is the only LLM step.
+2. **Film vectors tₘ.** The same thing for each film's tags in the database: its strongest 20 genome tags, weighted by relevance, or IDF-weighted tags from a custom CSV. The vectors are then centred on the average film, so tags that every film has don't count.
+3. **Translate.** ŷ = normalize(W x) with W = I + ABᵀ (384 × 384, rank-8 update). A starts at 0, so on day 0 W is the identity and tags match by meaning ("dark humor reels" lands near "dark comedy"). The trained part is ~6k parameters however many tags exist.
+4. **Score.** score(m) = ŷ · tₘ. Serve the top 8, plus 2 exploration picks drawn at random from ranks 11–50. Each rec says which of your feed's tags pushed it up (`because_of`).
 5. **Learn live.** Every ~20 feedback events, the trainer warm-starts from the current W and runs 100 Adam steps over the *whole* buffer, minimising three terms:
-   - **taste:** 1 − cos(W x, yᵤ), where yᵤ is the mean tag vector of the films that user loves (nudged away from ones they passed on). This is "reach their film taste from their Instagram taste alone".
+   - **taste:** 1 − cos(W x, yᵤ), where yᵤ is the mean vector of the films that user loves (nudged away from ones they passed on). This is "reach their film taste from their Instagram taste alone".
    - **ranking:** InfoNCE over the full catalog, so loved films beat every other film. Thumbs-downs are hard negatives.
-   - **λ‖ABᵀ‖²:** stays near W0 wherever there's no data.
+   - **λ‖ABᵀ‖²:** stays at zero-shot wherever there's no data.
 
-   The trainer then checks recall@50 on a held-out set (hidden favourites plus the newest 10% of loves). The new W is hot-swapped in only if it scores at least as well. Because W is shared, each new user's feedback improves the mapping for the next person with a similar feed.
+   The trainer then checks recall@50 on a held-out set (hidden favourites plus the newest 10% of loves). The new W is hot-swapped in only if it scores at least as well. W is shared, so it learns cross-vocabulary links like "gym" → "underdog story" from early users and applies them to everyone after.
 
-Code map: `tandem/model.py` (W, loss), `tandem/trainer.py` (loop, gate, hot-swap), `tandem/vision.py` (Llama), `tandem/api.py` (endpoints), `tandem/catalog.py` (tag spaces), `tandem/store.py` (SQLite).
+Code map: `tandem/model.py` (W, loss), `tandem/trainer.py` (loop, gate, hot-swap), `tandem/vision.py` (Llama), `tandem/encoder.py` (tag embeddings), `tandem/api.py` (endpoints), `tandem/store.py` (SQLite).
 
 ## Setup
 
@@ -43,7 +45,7 @@ With any other tag database, export one long CSV with columns `movie_id,title,ta
 python scripts/build_catalog.py --tags-csv our_movie_tags.csv
 ```
 
-The script prints which IG tags have no day-0 mapping. Add links for the important ones to `catalog/prior_map.json` and rerun, or let training learn them. Then commit `catalog/`.
+Commit `catalog/movies.json` and `catalog/movie_vecs.npy`.
 
 ### Run
 
@@ -56,9 +58,8 @@ pytest -q            # synthetic catalog, no key needed
 
 | Method | Path | What it does |
 |---|---|---|
-| `GET` | `/health` | Current W version, vocabulary sizes, event count, whether the vision key is set |
-| `GET` | `/ig-tags` | The IG vocabulary |
-| `POST` | `/feeds` | Multipart: `files` (feed screenshots), optional `tags` (JSON `{ig_tag: weight}`, handy for testing without a key), `user`. Returns `feed_id` and the IG tags it read |
+| `GET` | `/health` | Current W version, number of films, event count, whether the vision key is set |
+| `POST` | `/feeds` | Multipart: `files` (feed screenshots), optional `tags` (JSON `{tag: weight}` with any tags, handy for testing without a key), `user`. Returns `feed_id` and the tags it read |
 | `POST` | `/feeds/{id}/favourites` | `{"titles": [...], "holdout_frac": 0.3}` seeds known loves, with a share hidden for the recall check |
 | `GET` | `/feeds/{id}/recs` | 10 films, each with `rec_id`, top movie tags, `tmdb_id` (for posters) and `because_of` |
 | `POST` | `/feedback` | `{"rec_id": 12, "label": "love" \| "seen_loved" \| "nah"}`, or `feed_id` + `movie_id` instead of `rec_id` |
@@ -69,7 +70,7 @@ pytest -q            # synthetic catalog, no key needed
 Try it without a key:
 
 ```bash
-curl -F 'tags={"dark humor":1,"night drives":0.7,"gym":0.4}' localhost:8000/feeds
+curl -F 'tags={"dark humor":1,"neon night drives":0.7,"gym rat":0.4}' localhost:8000/feeds
 curl localhost:8000/feeds/<feed_id>/recs
 ```
 
@@ -91,5 +92,6 @@ Hugging Face Spaces (Docker, free CPU) also works, but its disk is wiped on rest
 | `TANDEM_DATA_DIR` | `backend/data` (`/data` in Docker) | SQLite + checkpoints |
 | `TANDEM_RETRAIN_EVERY` | 20 | Feedback events between rounds |
 | `TANDEM_BETA` | 1.0 | Weight of the taste-vector term vs the ranking term |
+| `TANDEM_FAKE_ENCODER` | 0 | 1 = hashing encoder instead of bge-small (tests, offline dev) |
 
 All other knobs (rank, τ, λ, learning rate, steps) are in `tandem/config.py`.

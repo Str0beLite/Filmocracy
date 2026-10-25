@@ -1,4 +1,4 @@
-"""The only LLM step: a Meta Llama vision model reads feed screenshots into an Instagram-tag vector.
+"""The only LLM step: a Meta Llama vision model reads feed screenshots into free-form tags with weights.
 
 Talks to any OpenAI-compatible endpoint (Meta's Llama API by default; see config.LLAMA_*).
 """
@@ -21,45 +21,42 @@ def _client():
     return AsyncOpenAI(api_key=os.environ.get(config.LLAMA_API_KEY_ENV), base_url=config.LLAMA_BASE_URL)
 
 
-def _schema(ig_tags):
-    return {
-        "type": "object",
-        "properties": {
-            "is_ad_or_noise": {"type": "boolean"},
-            "tags": {"type": "array", "items": {
-                "type": "object",
-                "properties": {"tag": {"type": "string", "enum": ig_tags},
-                               "weight": {"type": "number", "minimum": 0, "maximum": 1}},
-                "required": ["tag", "weight"]}},
-        },
-        "required": ["is_ad_or_noise", "tags"],
-    }
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_ad_or_noise": {"type": "boolean"},
+        "tags": {"type": "array", "items": {
+            "type": "object",
+            "properties": {"tag": {"type": "string"}, "weight": {"type": "number", "minimum": 0, "maximum": 1}},
+            "required": ["tag", "weight"]}},
+    },
+    "required": ["is_ad_or_noise", "tags"],
+}
+
+PROMPT = (
+    "This is a screenshot of someone's Instagram feed or a reel they watched. Describe it with 5 to 15 short "
+    "lowercase tags (1 to 4 words each), each with a weight from 0 to 1 for how strongly it applies. Cover what "
+    "it shows (e.g. 'street food', 'deadlift') AND how it feels (e.g. 'chaotic energy', 'cozy', 'dark humor'). "
+    "Set is_ad_or_noise to true for ads, sponsored posts, or screens with no real content.\n\n"
+    'Reply with JSON only: {"is_ad_or_noise": false, "tags": [{"tag": "...", "weight": 0.8}]}'
+)
+
+MAX_TAGS = 20
 
 
-def _prompt(ig_tags):
-    return (
-        "This is a screenshot of someone's Instagram feed or a reel they watched. Tag what it shows using ONLY "
-        "tags from this list, each with a weight from 0 to 1 for how strongly it applies. Pick 3 to 10 tags. "
-        "Set is_ad_or_noise to true for ads, sponsored posts, or screens with no real content.\n\n"
-        f"Tags: {', '.join(ig_tags)}\n\n"
-        'Reply with JSON only: {"is_ad_or_noise": false, "tags": [{"tag": "...", "weight": 0.8}]}'
-    )
-
-
-def parse_reply(text, ig_tags):
-    """Tolerant parse: strip code fences, keep only known tags, clamp weights. Returns (is_noise, {tag: w})."""
+def parse_reply(text):
+    """Tolerant parse: strip code fences, tidy tag strings, clamp weights. Returns (is_noise, {tag: w})."""
     text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.M).strip()
     data = json.loads(text[text.find("{"): text.rfind("}") + 1])
-    known = set(ig_tags)
     tags = {}
-    for t in data.get("tags", []):
-        name = str(t.get("tag", "")).strip().lower()
-        if name in known:
+    for t in data.get("tags", [])[:MAX_TAGS]:
+        name = " ".join(str(t.get("tag", "")).lower().split())[:60]
+        if name:
             tags[name] = max(tags.get(name, 0.0), min(max(float(t.get("weight", 0)), 0.0), 1.0))
     return bool(data.get("is_ad_or_noise", False)), tags
 
 
-async def read_screenshots(screenshots, ig_tags, concurrency=6):
+async def read_screenshots(screenshots, concurrency=6):
     """screenshots: list of (bytes, media_type). Returns [(is_noise, {tag: weight})], one per screenshot."""
     client = _client()
     sem = asyncio.Semaphore(concurrency)
@@ -72,13 +69,13 @@ async def read_screenshots(screenshots, ig_tags, concurrency=6):
                 max_tokens=512,
                 messages=[{"role": "user", "content": [
                     {"type": "image_url", "image_url": {"url": uri}},
-                    {"type": "text", "text": _prompt(ig_tags)},
+                    {"type": "text", "text": PROMPT},
                 ]}],
                 response_format={"type": "json_schema",
-                                 "json_schema": {"name": "ig_tags", "schema": _schema(ig_tags)}},
+                                 "json_schema": {"name": "feed_tags", "schema": SCHEMA}},
             )
             try:
-                return parse_reply(resp.choices[0].message.content or "", ig_tags)
+                return parse_reply(resp.choices[0].message.content or "")
             except (ValueError, KeyError, TypeError):
                 return True, {}   # unreadable reply: treat that screenshot as noise rather than fail the upload
 

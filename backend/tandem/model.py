@@ -1,10 +1,11 @@
-"""The trained part: W maps an Instagram-tag vector to a movie-tag vector.
+"""The trained part: W maps a feed's tag vector to a predicted film-taste vector.
 
-    ŷ = normalize(W x),   W = W0 + A Bᵀ,   score(m) = ŷ · t_m
+    ŷ = normalize(W x),   W = I + A Bᵀ,   score(m) = ŷ · t_m
 
-x is the user's IG tag vector, t_m is a movie's (centred, unit) tag vector from the database, and
-W0 is a prior built from tag names so day 0 already works. A starts at zero, so an untrained
-Translator is exactly W0. A Bᵀ is low rank (~10k params) so a handful of users can't wreck it.
+x is the weighted mean embedding of the feed's tags (any tags Llama wrote), t_m the same for a film's
+tags from the database. Both live in the encoder's 384-dim space, so W is 384×384 whatever the tag
+counts are. A starts at zero, so day 0 is W = I: match tags by meaning. A Bᵀ is low rank (~6k params)
+so a handful of users can't wreck it.
 """
 import torch
 import torch.nn.functional as F
@@ -95,7 +96,7 @@ def recall_at_k(model, feeds, examples, movies, k=config.RECALL_K):
         if fid not in cache:
             cache[fid] = scores(model, feeds[fid]["x"], movies)
         s = cache[fid]
-        hits += int((s > s[j]).sum().item() < k)
+        hits += int((s >= s[j]).sum().item() - 1 < k)   # ties count against us
     return hits / len(examples)
 
 

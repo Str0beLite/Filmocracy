@@ -1,6 +1,6 @@
 """Live training loop: retrain W on the whole replay buffer, gate on held-out recall, hot-swap.
 
-Runs in a background thread inside the API process. The trained part of W is ~10k parameters, so a retrain over a few
+Runs in a background thread inside the API process. The trained part of W is ~6k parameters, so a retrain over a few
 hundred events takes seconds on CPU and needs no GPU or separate worker.
 """
 import math
@@ -19,7 +19,7 @@ class Trainer:
         self.movies = torch.from_numpy(catalog.vecs)
         self.w0 = catalog.w0
         self.version = 0
-        self.model = Translator(self.w0)     # version 0 = the prior W0, no training yet
+        self.model = Translator(self.w0)     # version 0 = W0 = identity, no training yet
         self.model.eval()
         self._load_latest()
         self._pending = 0

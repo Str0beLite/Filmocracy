@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from . import config, vision
 from .catalog import Catalog
+from .encoder import get_encoder
 from .recommend import because_of, pick, score_feed
 from .store import Store
 from .trainer import Trainer
@@ -29,6 +30,7 @@ def create_app(catalog=None, store=None, start_trainer=True):
         state["trainer"] = Trainer(state["store"], state["catalog"])
         if start_trainer:
             state["trainer"].start()
+        get_encoder()  # load encoder weights at boot, not on the first request
         yield
         state["trainer"].stop()
 
@@ -46,19 +48,13 @@ def create_app(catalog=None, store=None, start_trainer=True):
     def health():
         v, _ = state["trainer"].current()
         cat = state["catalog"]
-        return {"ok": True, "w_version": v, "movies": len(cat.movies), "ig_tags": len(cat.ig_tags),
-                "movie_tags": len(cat.movie_tags), "events": state["store"].count_events(),
+        return {"ok": True, "w_version": v, "movies": len(cat.movies), "events": state["store"].count_events(),
                 "vision": vision.has_api_key()}
-
-    @app.get("/ig-tags")
-    def ig_tags():
-        """The Instagram tag vocabulary (the input dimensions of W)."""
-        return state["catalog"].ig_tags
 
     @app.post("/feeds")
     async def create_feed(user: str = Form("anon"), tags: str = Form(""),
                           files: list[UploadFile] = File(default=[])):
-        """Upload feed screenshots (read by Llama vision) and/or a JSON {ig_tag: weight} map. Returns a feed_id."""
+        """Upload feed screenshots (read by Llama vision) and/or a JSON {tag: weight} map. Returns a feed_id."""
         cat = state["catalog"]
         manual = json.loads(tags) if tags.strip() else {}
         shots = [(await f.read(), f.content_type or "image/png") for f in files]
@@ -68,15 +64,16 @@ def create_app(catalog=None, store=None, start_trainer=True):
         if shots:
             if not vision.has_api_key():
                 raise HTTPException(503, f"screenshots need {config.LLAMA_API_KEY_ENV}; send tags instead")
-            weights, dropped = vision.merge(await vision.read_screenshots(shots, cat.ig_tags))
+            weights, dropped = vision.merge(await vision.read_screenshots(shots))
         for t, w in manual.items():
+            t = " ".join(str(t).lower().split())
             weights[t] = max(weights.get(t, 0.0), float(w))
-        weights = {t: round(w, 3) for t, w in weights.items() if t in cat.ig_index and w > 0}
+        weights = {t: round(w, 3) for t, w in weights.items() if t and w > 0}
         if not weights:
-            raise HTTPException(400, "no known IG tags found (everything looked like ads or noise?)")
-        x = cat.ig_vector(weights)
+            raise HTTPException(400, "no tags found (everything looked like ads or noise?)")
+        x = cat.feed_vector(weights)
         fid = state["store"].add_feed(user, weights, x)
-        return {"feed_id": fid, "ig_tags": dict(sorted(weights.items(), key=lambda kv: -kv[1])),
+        return {"feed_id": fid, "tags": dict(sorted(weights.items(), key=lambda kv: -kv[1])),
                 "dropped_as_noise": dropped}
 
     class Favourites(BaseModel):
@@ -111,7 +108,7 @@ def create_app(catalog=None, store=None, start_trainer=True):
         items = pick(s, exclude=store.rated_movies(fid))
         ids = store.add_recs(fid, items, v)
         out = [{"rec_id": rec_id, **cat.public(it["idx"]), "score": float(s[it["idx"]]),
-                "because_of": because_of(model, f["x"], cat.vecs[it["idx"]], cat.ig_tags)}
+                "because_of": because_of(model, f["tags"], cat.vecs[it["idx"]])}
                for rec_id, it in zip(ids, items)]
         return {"feed_id": fid, "w_version": v, "recs": out}
 

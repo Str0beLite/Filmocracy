@@ -1,46 +1,44 @@
-"""End-to-end checks on a synthetic tag catalog (no API key, no downloads)."""
+"""End-to-end checks on a synthetic catalog with the fake encoder (no API key, no downloads)."""
 import json
+import os
 import random
 
-import numpy as np
-import pytest
-import torch
-from fastapi.testclient import TestClient
+os.environ["TANDEM_FAKE_ENCODER"] = "1"
 
-from tandem import config, vision
-from tandem.api import create_app
-from tandem.catalog import Catalog
-from tandem.store import Store
-from tandem.trainer import Trainer
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
+import torch  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
-MOVIE_TAGS = ["underdog", "boxing", "inspirational", "sports", "romance", "paris", "comedy", "funny",
-              "space", "aliens", "horror", "creepy", "heist", "noir", "musical", "western"]
-FILLER_TAGS = MOVIE_TAGS[4:]
-TARGET_TAGS = ["underdog", "boxing", "inspirational", "sports"]
-# "gym" has no day-0 mapping, so zero-shot can't connect gym feeds to underdog films; only training can.
-IG_TAGS = ["gym", "bodybuilding", "memes", "couples", "nasa", "haunted houses"]
+from tandem import config, vision  # noqa: E402
+from tandem.api import create_app  # noqa: E402
+from tandem.catalog import Catalog  # noqa: E402
+from tandem.encoder import bag  # noqa: E402
+from tandem.store import Store  # noqa: E402
+from tandem.trainer import Trainer  # noqa: E402
+
+FILLER_TAGS = ["dark comedy", "romance", "paris", "space opera", "aliens", "haunted house", "heist",
+               "film noir", "musical", "western", "slow burn", "family drama"]
+TARGET_TAGS = ["underdog boxer", "perseverance", "comeback story", "training montage"]
+# Feed tags share no words with the target films' tags, so day 0 (W = I) can't connect them; only training can.
+GYM_TAGS = ["gym", "deadlift", "protein shakes", "grindset"]
 
 
 def make_catalog(n_filler=300, n_target=10, seed=0):
-    rng = np.random.default_rng(seed)
-    col = {t: i for i, t in enumerate(MOVIE_TAGS)}
-    raw, movies = [], []
+    rng = random.Random(seed)
+    movies = []
     for i in range(n_filler + n_target):
-        v = rng.uniform(0, 0.2, len(MOVIE_TAGS))
         target = i >= n_filler
-        for t in (TARGET_TAGS if target else rng.choice(FILLER_TAGS, 3, replace=False)):
-            v[col[t]] = rng.uniform(0.7, 1.0)
-        raw.append(v)
-        movies.append({"id": i, "title": f"Underdog {i}" if target else f"Filler {i}"})
-    w0 = np.zeros((len(MOVIE_TAGS), len(IG_TAGS)), dtype=np.float32)
-    for ig, mt in [("memes", "comedy"), ("couples", "romance"), ("nasa", "space"), ("haunted houses", "horror")]:
-        w0[col[mt], IG_TAGS.index(ig)] = 1.0
-    return Catalog(movies, MOVIE_TAGS, IG_TAGS, np.array(raw), w0)
+        names = rng.sample(TARGET_TAGS, 3) if target else rng.sample(FILLER_TAGS, 3)
+        movies.append({"id": i, "title": f"Underdog {i}" if target else f"Filler {i}",
+                       "tags": {t: round(rng.uniform(0.6, 1.0), 2) for t in names}})
+    raw = np.stack([bag(m["tags"]) for m in movies])
+    return Catalog(movies, raw)
 
 
 def gym_tags(rng):
-    tags = {"gym": round(rng.uniform(0.7, 1), 2), "bodybuilding": round(rng.uniform(0.3, 1), 2)}
-    tags[rng.choice(["memes", "couples", "nasa"])] = round(rng.uniform(0.1, 0.4), 2)
+    tags = {t: round(rng.uniform(0.5, 1), 2) for t in rng.sample(GYM_TAGS, 3)}
+    tags[rng.choice(["memes", "couples", "travel vlog"])] = round(rng.uniform(0.1, 0.4), 2)
     return tags
 
 
@@ -51,10 +49,10 @@ def setup(tmp_path, monkeypatch):
     return make_catalog(), Store(tmp_path / "t.db")
 
 
-def test_untrained_translator_is_the_prior(setup):
+def test_untrained_translator_is_identity(setup):
     cat, store = setup
     t = Trainer(store, cat)
-    assert torch.allclose(t.model.W(), torch.from_numpy(cat.w0))
+    assert torch.allclose(t.model.W(), torch.eye(config.DIM))
 
 
 def test_api_round_trip_and_live_training(setup):
@@ -63,12 +61,11 @@ def test_api_round_trip_and_live_training(setup):
     targets = [i for i, m in enumerate(cat.movies) if m["title"].startswith("Underdog")]
     with TestClient(create_app(catalog=cat, store=store, start_trainer=False)) as c:
         assert c.get("/health").json()["w_version"] == 0
-        assert c.get("/ig-tags").json() == IG_TAGS
 
-        # Day 0: a "memes" feed already gets comedies through the prior.
-        fid = c.post("/feeds", data={"tags": json.dumps({"memes": 1.0})}).json()["feed_id"]
+        # Day 0: free-form feed tags already match films by meaning (W = I).
+        fid = c.post("/feeds", data={"tags": json.dumps({"dark comedy skits": 1.0, "late night memes": 0.3})}).json()["feed_id"]
         top = c.get(f"/feeds/{fid}/recs").json()["recs"][0]
-        assert "comedy" in top["tags"] and top["because_of"] == ["memes"]
+        assert "dark comedy" in top["tags"] and top["because_of"][0] == "dark comedy skits"
 
         # Several gym-feed users each love some underdog films and pass on some recs.
         for u in range(8):
@@ -93,7 +90,7 @@ def test_api_round_trip_and_live_training(setup):
         # The new user (zero feedback of their own) now gets underdog films, credited to their gym tags.
         recs = c.get(f"/feeds/{fid}/recs").json()["recs"]
         hits = [r for r in recs if r["title"].startswith("Underdog")]
-        assert hits and "gym" in hits[0]["because_of"]
+        assert hits and set(hits[0]["because_of"]) & set(GYM_TAGS)
         assert len(c.get("/model").json()["history"]) == 1
 
 
@@ -101,14 +98,15 @@ def test_gate_rejects_a_worse_model(setup):
     cat, store = setup
     trainer = Trainer(store, cat)
     targets = [i for i, m in enumerate(cat.movies) if m["title"].startswith("Underdog")]
-    x = cat.ig_vector({"memes": 1.0})
-    comedies = [i for i in range(len(cat.movies)) if "comedy" in cat.top_tags(i, 3)]
-    # Held-out: a memes user loves comedies (the prior already gets this right).
-    good = store.add_feed("good", {"memes": 1.0}, x)
+    feed = {"dark comedy skits": 1.0}
+    x = cat.feed_vector(feed)
+    comedies = [i for i in range(len(cat.movies)) if "dark comedy" in cat.movies[i]["tags"]]
+    # Held-out: a dark-comedy feed loves dark comedies (day 0 already gets this right).
+    good = store.add_feed("good", feed, x)
     for i in comedies[:5]:
         store.add_event(good, i, "favourite", 0, split="holdout")
     # A troll with the same feed says comedies are bad and underdog films are great.
-    troll = store.add_feed("troll", {"memes": 1.0}, x)
+    troll = store.add_feed("troll", feed, x)
     for i in comedies:
         store.add_event(troll, i, "nah", 0)
     for i in targets:
@@ -120,7 +118,7 @@ def test_gate_rejects_a_worse_model(setup):
 
 def test_checkpoint_reloads_on_restart(setup):
     cat, store = setup
-    fid = store.add_feed("u", {"gym": 1.0}, cat.ig_vector({"gym": 1.0}))
+    fid = store.add_feed("u", {"gym": 1.0}, cat.feed_vector({"gym": 1.0}))
     store.add_event(fid, len(cat.movies) - 1, "love", 0)
     t1 = Trainer(store, cat)
     res = t1.retrain()
@@ -132,17 +130,17 @@ def test_checkpoint_reloads_on_restart(setup):
 def test_screenshots_go_through_llama_and_ads_are_dropped(setup, monkeypatch):
     cat, store = setup
 
-    async def fake_read(shots, ig_tags):
-        return [(False, {"gym": 0.9, "memes": 0.2}), (True, {"bodybuilding": 1.0})]
+    async def fake_read(shots):
+        return [(False, {"gym": 0.9, "brutalist architecture": 0.2}), (True, {"protein ad": 1.0})]
 
     monkeypatch.setattr(vision, "has_api_key", lambda: True)
     monkeypatch.setattr(vision, "read_screenshots", fake_read)
     with TestClient(create_app(catalog=cat, store=store, start_trainer=False)) as c:
         res = c.post("/feeds", files=[("files", ("a.png", b"\x89PNG", "image/png")),
                                       ("files", ("b.png", b"\x89PNG", "image/png"))]).json()
-        assert res["dropped_as_noise"] == 1 and res["ig_tags"] == {"gym": 0.9, "memes": 0.2}
+        assert res["dropped_as_noise"] == 1 and res["tags"] == {"gym": 0.9, "brutalist architecture": 0.2}
 
 
 def test_llama_reply_parsing_is_tolerant():
-    text = '```json\n{"is_ad_or_noise": false, "tags": [{"tag": "Gym", "weight": 1.4}, {"tag": "made up", "weight": 0.5}]}\n```'
-    assert vision.parse_reply(text, IG_TAGS) == (False, {"gym": 1.0})
+    text = '```json\n{"is_ad_or_noise": false, "tags": [{"tag": " Gym  Rat ", "weight": 1.4}, {"tag": "", "weight": 0.5}]}\n```'
+    assert vision.parse_reply(text) == (False, {"gym rat": 1.0})

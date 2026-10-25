@@ -5,6 +5,7 @@ import numpy as np
 import torch
 
 from . import config
+from .encoder import embed
 from .model import scores
 
 
@@ -14,10 +15,15 @@ def score_feed(model, x, movie_vecs):
 
 
 @torch.no_grad()
-def because_of(model, x, movie_vec, ig_tags, k=3):
-    """Which of the user's IG tags pushed this film up most: contribution_j = x_j · (W[:, j] · t_m)."""
-    contrib = x * (model.W().numpy().T @ movie_vec)
-    return [ig_tags[j] for j in np.argsort(-contrib)[:k] if contrib[j] > 0]
+def because_of(model, tags, movie_vec, k=3):
+    """Which of the feed's tags pushed this film up most: contribution = w · (W e_tag) · t_m."""
+    if not tags:
+        return []
+    names = list(tags)
+    w = np.array([tags[t] for t in names], np.float32)
+    W = model.W().numpy()
+    contrib = w * ((embed(names) @ W.T) @ movie_vec)
+    return [names[j] for j in np.argsort(-contrib)[:k] if contrib[j] > 0]
 
 
 def pick(scores, exclude=(), rng=random):

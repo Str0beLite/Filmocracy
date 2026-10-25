@@ -48,7 +48,7 @@ class Store:
 
     # feeds
     def add_feed(self, user, tags, x):
-        """tags: {ig_tag: weight} as the vision model read them; x: the IG vector built from them."""
+        """tags: {tag: weight} as the vision model read them; x: the feed vector built from them."""
         fid = uuid.uuid4().hex[:12]
         self._exec("INSERT INTO feeds VALUES (?,?,?,?,?)",
                    (fid, user, time.time(), json.dumps(tags), x.astype(np.float32).tobytes()))

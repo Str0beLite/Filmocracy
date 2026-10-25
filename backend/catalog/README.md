@@ -1,1 +1,1 @@
-Built by `scripts/build_catalog.py` from the movie tag database. `ig_tags.json` (IG vocabulary) and `prior_map.json` (hand-picked day-0 IG→movie tag links) are edited by hand; rebuild after changing either.
+Built by `scripts/build_catalog.py` from the movie tag database: `movies.json` (each film with its strongest tags) and `movie_vecs.npy` (weighted mean tag embedding per film). Commit both.
