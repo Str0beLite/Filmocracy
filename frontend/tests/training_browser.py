@@ -15,7 +15,7 @@ CHROME = os.getenv('TRAINING_TEST_CHROME', '/Applications/Google Chrome.app/Cont
 PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
 
 
-def check(browser, width, height, existing=None):
+def check(browser, width, height, existing=None, shot_count=3):
     page = browser.new_page(viewport={'width': width, 'height': height}, reduced_motion='reduce')
     if existing == 'main':
         page.add_init_script("localStorage.setItem('tandem.device-user.phone', 'phone-' + '1'.repeat(32))")
@@ -46,7 +46,7 @@ def check(browser, width, height, existing=None):
         elif path == '/profiles/me':
             assert req.post_data_json == {'display_name': 'Test Viewer'}
         elif path == '/training/feeds':
-            assert req.post_data_buffer.count(b'name="files"') == 3
+            assert req.post_data_buffer.count(b'name="files"') == shot_count
             state['uploaded'] = True
             body = {'feed_id': 'fixture-feed', 'tags': {'comedy': 1, 'warm': 0.8}}
         elif path == '/training/feeds/fixture-feed/next':
@@ -60,7 +60,7 @@ def check(browser, width, height, existing=None):
                 idx = state['next']
                 body = {'rec_id': idx, 'w_version': 0, 'movie': {'id': idx, 'title': f'Test Movie {idx}', 'year': 2001, 'trailer_key': 'abcdefghijk', 'overview': 'A synthetic movie for browser verification.'}}
         elif path == '/feedback':
-            assert req.post_data_json['label'] in ('love', 'nah')
+            assert req.post_data_json['label'] in ('love', 'nah', 'seen_loved', 'seen_disliked')
             votes.append(req.post_data_json)
         else:
             raise AssertionError(f'Training unexpectedly called {path}')
@@ -71,6 +71,10 @@ def check(browser, width, height, existing=None):
     page.wait_for_load_state('networkidle')
     assert page.get_by_text('Sign in with Google', exact=False).count() == 0
     page.screenshot(path=f'/private/tmp/tandem-training-name-{width}.png', full_page=True)
+    def appearance(selector):
+        return page.locator(selector).evaluate("el => { const s = getComputedStyle(el); return { font: s.fontFamily, size: s.fontSize, weight: s.fontWeight, color: s.color, background: s.backgroundColor, radius: s.borderRadius }; }")
+    training_style = {selector: appearance(selector) for selector in ['.wordmark', '.ps-title', '.field-text']}
+    assert page.get_by_label('First name').get_attribute('maxlength') == '20'
     page.get_by_label('First name').fill('Test Viewer')
     page.get_by_role('button', name='Continue', exact=True).click()
     page.get_by_role('button', name='Laugh until it hurts').click()
@@ -78,28 +82,45 @@ def check(browser, width, height, existing=None):
     page.screenshot(path=f'/private/tmp/tandem-training-feeling-{width}.png', full_page=True)
     page.get_by_role('button', name='Continue', exact=True).click()
     upload = page.get_by_label('Choose Explore screenshots')
+    assert page.get_by_role('button', name='Read My Feed', exact=True).is_disabled()
     upload.set_input_files([{'name': 'one.png', 'mimeType': 'image/png', 'buffer': PNG}])
-    assert page.get_by_role('button', name='Read My Feed', exact=True).is_disabled()
-    upload.set_input_files([{'name': f'{i}.png', 'mimeType': 'image/png', 'buffer': PNG} for i in [2, 3]])
     assert page.get_by_role('button', name='Read My Feed', exact=True).is_enabled()
-    page.get_by_role('button', name='Remove screenshot 2').click()
-    assert page.get_by_role('button', name='Read My Feed', exact=True).is_disabled()
+    if shot_count > 1:
+        upload.set_input_files([{'name': f'{i}.png', 'mimeType': 'image/png', 'buffer': PNG} for i in range(2, shot_count + 1)])
+    page.get_by_role('button', name='Remove screenshot 1').click()
+    if shot_count == 1:
+        assert page.get_by_role('button', name='Read My Feed', exact=True).is_disabled()
+    else:
+        assert page.get_by_role('button', name='Read My Feed', exact=True).is_enabled()
     upload.set_input_files([{'name': 'replacement.png', 'mimeType': 'image/png', 'buffer': PNG}])
     page.screenshot(path=f'/private/tmp/tandem-training-shots-{width}.png', full_page=True)
     page.get_by_role('button', name='Read My Feed', exact=True).click()
     page.get_by_role('heading', name='Test Movie 1', exact=True).wait_for()
-    page.get_by_role('button', name='Yes, I’d Watch').click()
+    page.wait_for_function("() => {const buttons = [...document.querySelectorAll('.training-votes .vote-btn')]; return buttons.length === 4 && buttons.every(b => {const s = getComputedStyle(b).scale; return s === 'none' || Math.abs(parseFloat(s) - 1) < 0.001;});}")
+    page.evaluate('window.scrollTo(0, 0)')
+    player = page.locator('iframe').bounding_box()
+    like = page.get_by_role('button', name='Like', exact=True).bounding_box()
+    dislike = page.get_by_role('button', name='Dislike', exact=True).bounding_box()
+    assert player and like and dislike
+    assert like['y'] >= player['y'] + player['height'], 'Voting controls must be below the trailer'
+    assert abs(like['y'] - dislike['y']) < 2, 'Like and dislike must share a row'
+    for name in ['Like', 'Dislike', 'Like and have seen it', 'Dislike and have seen it']:
+        box = page.get_by_role('button', name=name, exact=True).bounding_box()
+        assert box and box['y'] >= player['y'] + player['height']
+        assert box['y'] + box['height'] <= height, 'All four voting controls should fit in the viewport'
+    page.screenshot(path=f'/private/tmp/filmocracy-training-vote-{width}.png', full_page=True)
+    page.get_by_role('button', name='Like and have seen it' if existing else 'Like', exact=True).click()
     page.get_by_text('1 vote saved', exact=False).wait_for()
-    assert len(votes) == 1 and votes[0]['label'] == 'love'
+    assert len(votes) == 1 and votes[0]['label'] == ('seen_loved' if existing else 'love')
     page.get_by_role('button', name='Next Trailer', exact=True).click()
     page.get_by_role('alert').filter(has_text='Trailer checks unavailable').wait_for()
     assert len(votes) == 1
     page.get_by_role('button', name='Next Trailer', exact=True).click()
     page.get_by_role('heading', name='Test Movie 3', exact=True).wait_for()
     assert page.locator('iframe').get_attribute('src').startswith('https://www.youtube-nocookie.com/')
-    page.get_by_role('button', name='Not for Me', exact=True).click()
+    page.get_by_role('button', name='Dislike and have seen it' if existing else 'Dislike', exact=True).click()
     page.get_by_text('2 votes saved', exact=False).wait_for()
-    assert len(votes) == 2 and votes[1]['label'] == 'nah'
+    assert len(votes) == 2 and votes[1]['label'] == ('seen_disliked' if existing else 'nah')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Horizontal overflow'
     path = Path('/private/tmp') / f'tandem-training-{width}.png'
     page.screenshot(path=str(path), full_page=True)
@@ -113,9 +134,13 @@ def check(browser, width, height, existing=None):
     assert not any('/sessions' in path for path in requests)
     page.goto(f'{ORIGIN}/phone/sign-in')
     page.get_by_role('heading', name='What do your friends call you?').wait_for()
+    page.wait_for_load_state('networkidle')
+    for selector, expected in training_style.items():
+        assert appearance(selector) == expected, f'Training must match the main phone style for {selector}'
+    page.screenshot(path=f'/private/tmp/filmocracy-main-name-{width}.png', full_page=True)
     assert page.get_by_text('Sign in with Google', exact=False).count() == 0
     page.close()
-    print(f'PASS {width}x{height} ({existing or "new"} identity): anonymous identity, 3 screenshots, feedback, retry, no room, no overflow; {path}')
+    print(f'PASS {width}x{height} ({existing or "new"} identity): anonymous identity, {shot_count} screenshots, feedback, retry, no room, no overflow; {path}')
 
 
 with sync_playwright() as p:
@@ -123,7 +148,7 @@ with sync_playwright() as p:
     try:
         check(browser, 390, 844)
         check(browser, 1280, 900)
-        check(browser, 390, 844, existing="main")
-        check(browser, 390, 844, existing="trainer")
+        check(browser, 390, 844, existing="main", shot_count=1)
+        check(browser, 390, 844, existing="trainer", shot_count=2)
     finally:
         browser.close()

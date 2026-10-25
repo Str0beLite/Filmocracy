@@ -25,7 +25,7 @@ def shots(count=3, mime="image/png"):
 
 def muse(monkeypatch):
     async def read(images):
-        assert len(images) == 3
+        assert 1 <= len(images) <= 3
         return []
 
     async def summarize(_):
@@ -36,19 +36,22 @@ def muse(monkeypatch):
     monkeypatch.setattr(vision, "summarize", summarize)
 
 
-def test_training_requires_three_images_and_authenticated_owner(training_setup, monkeypatch):
+@pytest.mark.parametrize("count", [1, 2, 3])
+def test_training_accepts_one_to_three_images_and_authenticated_owner(
+    training_setup, monkeypatch, count
+):
     factory, store, _ = training_setup
     muse(monkeypatch)
     with TestClient(factory()) as c:
         assert c.post("/training/feeds", files=shots()).status_code == 401
-        for count in (1, 2, 4):
-            assert sessions.post(c, "/training/feeds", "a", files=shots(count)).status_code == 422
+        for invalid_count in (0, 4):
+            assert sessions.post(c, "/training/feeds", "a", files=shots(invalid_count)).status_code == 422
         assert sessions.post(c, "/training/feeds", "a", files=shots(mime="image/svg+xml")).status_code == 422
         assert sessions.post(c, "/training/feeds", "a", files=[("files", ("bad.png", b"not an image", "image/png"))] * 3).status_code == 422
         gif = BytesIO()
         Image.new("RGB", (40, 40), "blue").save(gif, "GIF")
         assert sessions.post(c, "/training/feeds", "a", files=[("files", ("bad.png", gif.getvalue(), "image/png"))] * 3).status_code == 422
-        feed = sessions.post(c, "/training/feeds", "a", files=shots())
+        feed = sessions.post(c, "/training/feeds", "a", files=shots(count))
         assert feed.status_code == 200
         fid = feed.json()["feed_id"]
         assert store.get_feed(fid)["user"] == "a"
@@ -145,6 +148,26 @@ def test_training_defaults_off(training_setup, monkeypatch):
     with TestClient(factory()) as c:
         assert c.get("/ready").json()["training_enabled"] is False
         assert c.app.state.tandem["trainer"].thread is None
+
+
+@pytest.mark.parametrize("label,positive", [
+    ("love", True), ("nah", False), ("seen_loved", True), ("seen_disliked", False)
+])
+def test_four_training_votes_keep_seen_label_and_training_direction(training_setup, label, positive):
+    factory, store, _ = training_setup
+    with TestClient(factory()) as c:
+        fid = sessions.post(c, "/feeds", "a", data={"tags": '{"tag 1":1}'}).json()["feed_id"]
+        rec = sessions.get(c, f"/feeds/{fid}/recs", "a").json()["recs"][0]
+        response = sessions.post(c, "/feedback", "a", json={"rec_id": rec["rec_id"], "label": label})
+        assert response.status_code == 200
+        assert store.events()[0]["label"] == label
+        idx = c.app.state.tandem["catalog"].id_to_idx[rec["id"]]
+        loved, passed = store.votes(fid)
+        assert idx in (loved if positive else passed)
+        assert idx not in (passed if positive else loved)
+        feeds, _, _, _ = c.app.state.tandem["trainer"].build_dataset()
+        assert idx in feeds[fid]["pos" if positive else "neg"]
+        assert idx in store.rated_movies(fid)
 
 
 def test_session_vote_sync_wakes_the_same_trainer(training_setup, monkeypatch, tmp_path):

@@ -138,7 +138,7 @@ A user's taste embedding is the `x` of the feed they uploaded most recently. It 
 | `GET` | `/groups/{gid}` | Host and member ids |
 | `POST` | `/groups/{gid}/recs` | `{"boost": [tags], "exclude": [movie ids]}`. Returns `{group_id, w_version, users: {user_id: [rec × 10]}, group: [rec × 10]}`: one list per member from their own embedding, plus one from the group's average embedding. Host or members only. Picking which trailer to show from these lists is the caller's job |
 | `GET` | `/feeds/{id}/recs?boost=a&boost=b` | 10 recs for one of your own feeds |
-| `POST` | `/feedback` | A vote. `{"movie_id": 6, "label": "love" \| "seen_loved" \| "nah"}` goes on your latest feed (group yes → `love`, no → `nah`). `{"rec_id": 12, "label": ...}` also works for per-user recs |
+| `POST` | `/feedback` | A vote. `{"movie_id": 6, "label": "love" \| "seen_loved" \| "nah" \| "seen_disliked"}` goes on your latest feed (group yes → `love`, no → `nah`). `{"rec_id": 12, "label": ...}` also works for per-user recs |
 | `POST` | `/feeds/{id}/favourites` | `{"titles": [...], "holdout_frac": 0.3}` seeds known loves, with a share hidden for the recall check |
 | `POST` | `/admin/retrain` | Header `X-Admin-Token`. Runs a training round now (handy on stage) |
 | `GET` | `/model` | Every round's recall before and after, plus accepted or rejected, for the live demo chart |
@@ -185,4 +185,4 @@ For the development-only vision demo with the unified API, serve `backend/script
 
 ## Individual training
 
-Open `/training` for a name, a feeling, exactly three Explore screenshots, then trailer voting without a TV session. The existing automatic trainer is opt-in through `TANDEM_TRAINING_ENABLED=1`. See [the training guide](../docs/training.md).
+Open `/training` for a name, a feeling, one to three Explore screenshots, then trailer voting without a TV session. The existing automatic trainer is opt-in through `TANDEM_TRAINING_ENABLED=1`. See [the training guide](../docs/training.md).
