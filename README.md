@@ -1,3 +1,5 @@
+> SQLite session integration: Docker/Railway run `unified:app`, preserving every recommendation route below and adding durable QR sessions, atomic voting and authenticated SSE. See [the integration guide](docs/unified-backend.md). Unified keeps training disabled and requires no Supabase service.
+
 # Tandem
 
 **Movie night picks from your group's Instagram feeds.** Everyone uploads a few screenshots of their feed once, joins the host's screen with a QR code, and Tandem serves trailers the whole group will want to watch. You never rate a single movie: your feed already says what your taste is.

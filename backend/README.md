@@ -1,3 +1,7 @@
+> **Unified SQLite service:** Docker/Railway run `unified:app`; `app:app` is an alias. Use [the integration guide](../docs/unified-backend.md) for durable QR sessions, atomic votes, authorized SSE updates, metadata migration and deployment. Supabase is no longer required. All recommendation routes below remain available; unified disables model training.
+>
+> Run from the repository root: `backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 8000`. Use main's Google ID tokens, GOOGLE_CLIENT_ID, and a YOUTUBE_API_KEY for queue validation. The standalone documentation below retains its original live-training development mode.
+
 # Backend
 
 A FastAPI service that turns screenshots of someone's Instagram feed into film recommendations, for one person or a whole group, and keeps learning from the thumbs up and thumbs down people give. One process does all of it: serving, the SQLite event log, and a background thread that retrains W.
