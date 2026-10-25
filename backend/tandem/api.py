@@ -17,6 +17,7 @@ from . import config, grid, vision
 from .auth import current_user, require_admin
 from .catalog import Catalog
 from .encoder import get_encoder, unit
+from .model import Translator
 from .recommend import because_of, boost, pick, score_feed
 from .store import Store
 from .trainer import Trainer
@@ -84,7 +85,7 @@ def create_app(catalog=None, store=None, start_trainer=True):
         if shots:
             if not vision.has_api_key():
                 raise HTTPException(503, f"screenshots need {config.MUSE_API_KEY_ENV}; send tags instead")
-            weights, dropped = vision.merge(await vision.read_screenshots(shots))
+            weights, dropped = await vision.summarize(await vision.read_screenshots(shots))
         for t, w in manual.items():
             t = " ".join(str(t).lower().split())
             weights[t] = max(weights.get(t, 0.0), float(w))
@@ -101,6 +102,20 @@ def create_app(catalog=None, store=None, start_trainer=True):
         """The caller's latest feed. feed_id null = send them to onboarding (upload screenshots)."""
         f = state["store"].latest_feed(user)
         return {"user": user, "feed_id": f["id"], "tags": f["tags"]} if f else {"user": user, "feed_id": None}
+
+    if config.DEV_AUTH:
+        # shortcut: dev-only peek for the vision demo page: untrained W = I plus a popularity nudge, pure top-k, not logged.
+        @app.get("/dev/feeds/{fid}/top")
+        def top_recs(fid: str, k: int = Query(5, ge=1, le=50), pop: float = Query(0.05, ge=0, le=1),
+                     user: str = Depends(current_user)):
+            f, cat = _feed(fid, user), state["catalog"]
+            model = Translator(cat.w0).eval()   # A = 0, so W = W0 = I
+            counts = np.array([m.get("popularity", 0) for m in cat.movies])
+            pct = counts.argsort().argsort() / (len(counts) - 1)   # 0 = least rated film, 1 = most rated
+            s = score_feed(model, f["x"], cat.vecs) + pop * pct ** 2
+            return {"w_version": "identity", "pop": pop,
+                    "recs": [{**cat.public(int(i)), "score": float(s[i]),
+                              "because_of": because_of(model, f["tags"], cat.vecs[i])} for i in np.argsort(-s)[:k]]}
 
     class Favourites(BaseModel):
         titles: list[str] = []

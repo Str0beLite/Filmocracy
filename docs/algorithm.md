@@ -34,7 +34,7 @@ The key idea is that **both sides are bags of tags of any size.** Every tag stri
 
 **Tag encoder.** For any tag string $s$, $E(s) \in \mathbb{R}^{384}$ with $\lVert E(s) \rVert = 1$.
 
-**Feed vector (piece A).** Take the tags $\{(s_i, w_i)\}$ read from all non-ad screenshots, with weights averaged across screenshots:
+**Feed vector (piece A).** Take the tags $\{(s_i, w_i)\}$ for the whole feed: one text-only Muse call reads every non-ad tile's tags and sums up the person in 10 to 15 tags (falling back to weights averaged across tiles if that call fails):
 
 $$x = \operatorname{normalize}\Big(\sum_i w_i\, E(s_i)\Big)$$
 
@@ -78,7 +78,7 @@ These are the things that must stay true. Everything else inside a piece can cha
 
 ## Piece A: screenshot → feed embedding
 
-Flow: `POST /feeds` (multipart `files`) → `grid.split_explore()` turns each Explore screenshot into one shot per tile (non-grid images stay whole) → `vision.read_screenshots(shots)` → `[(is_noise, {tag: w})]` per screenshot → `vision.merge()` averages the non-noise ones → `Catalog.feed_vector(tags)` → `x`.
+Flow: `POST /feeds` (multipart `files`) → `grid.split_explore()` turns each Explore screenshot into one shot per tile (non-grid images stay whole) → `vision.read_screenshots(shots)` → `[(is_noise, {tag: w})]` per screenshot → `vision.summarize()` boils the non-noise ones down in one text-only call (`merge()`'s average is the fallback) → `Catalog.feed_vector(tags)` → `x`.
 
 - **Tiles:** `grid.py` finds the thin background-colour gutters between tiles and cuts along them (XY-cut), then drops the status, search and nav bars. Tiles cut short by a white sky are grown back to full size.
 - **Model:** Meta Muse Spark (`muse-spark-1.3`) over the Meta Model API's OpenAI-compatible Chat Completions. Set `MUSE_API_KEY`, and optionally `MUSE_BASE_URL` and `MUSE_MODEL`.

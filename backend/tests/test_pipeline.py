@@ -1,4 +1,5 @@
 """End-to-end checks on a synthetic catalog with the fake encoder (no API key, no downloads)."""
+import asyncio
 import json
 import os
 import random
@@ -245,3 +246,22 @@ def test_real_auth_rejects_missing_token_and_dev_auth_passes_name(setup, monkeyp
         assert c.get("/me", headers=as_("forged")).status_code == 401
         monkeypatch.setattr(config, "DEV_AUTH", True)
         assert c.get("/me", headers=as_("alice")).json()["user"] == "alice"
+
+
+def test_summarize_sums_up_the_feed_and_falls_back_to_the_average(monkeypatch):
+    readings = [(False, {"curious": 0.8}), (False, {"curious": 0.4, "college football": 0.9}), (True, {"ad": 1.0})]
+    monkeypatch.setattr(vision, "_client", lambda: None)
+
+    async def fake_ask(client, content):
+        assert "post 2: curious 0.40, college football 0.90" in content[0]["text"]
+        return False, {"curious": 0.9}
+
+    monkeypatch.setattr(vision, "_ask", fake_ask)
+    assert asyncio.run(vision.summarize(readings)) == ({"curious": 0.9}, 1)
+
+    async def broken_ask(client, content):
+        raise RuntimeError("api down")
+
+    monkeypatch.setattr(vision, "_ask", broken_ask)
+    tags, dropped = asyncio.run(vision.summarize(readings))
+    assert dropped == 1 and tags == pytest.approx({"curious": 0.6, "college football": 0.45})

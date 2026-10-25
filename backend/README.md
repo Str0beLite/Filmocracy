@@ -105,9 +105,9 @@ python scripts/seed_fake.py --api http://localhost:8000      # 60 fake users, ab
 
 The algorithm is done: tags to x, W, recs, group lists, live training and the recall gate. Two pieces are owned by teammates now.
 
-**1. Screenshots → feed tags (`tandem/vision.py`).** This is a first version that has never run against the real API, because there was no `MUSE_API_KEY`. The contract the rest of the code depends on:
+**1. Screenshots → feed tags (`tandem/vision.py`).** Tested against the real Muse API on real Explore screenshots. The contract the rest of the code depends on:
 - `read_screenshots([(bytes, media_type), ...])` returns one `(is_noise, {tag: weight 0..1})` per screenshot.
-- `merge(readings)` returns `({tag: weight}, n_dropped)`.
+- `summarize(readings)` (async) returns `({tag: weight}, n_dropped)`: one text-only call sums up every tile's tags, falling back to `merge()`'s plain average.
 - `POST /feeds` passes that dict to `catalog.feed_vector`, which turns it into x.
 
 Anything that produces lowercase free-form tags with weights works: a different model, a different prompt, or OCR of captions. Changing the encoder (`bge-small`) or `DIM` means rebuilding the catalog and throwing away `w_seed.pt` and every checkpoint.

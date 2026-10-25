@@ -1,0 +1,99 @@
+<!doctype html>
+<!-- Try the screenshot -> tags step in a browser. Open this file directly; it talks to a running API with TANDEM_DEV_AUTH=1. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feed Tag Demo</title>
+<style>
+  :root { --bg: #f7f6f3; --card: #fff; --text: #1c1b19; --muted: #6b6862; --line: #e2dfd8; --accent: #c2410c; --on-accent: #fff; --bar: #fed7aa; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161513; --card: #201f1c; --text: #ece9e3; --muted: #9c978e; --line: #35332f; --accent: #fb923c; --on-accent: #1c1b19; --bar: #7c2d12; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 32px 16px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 24px; }
+  form { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px; display: grid; gap: 14px; }
+  label { display: grid; gap: 4px; font-size: .875rem; color: var(--muted); }
+  input[type=text] { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  input[type=file] { font: inherit; color: var(--text); }
+  button { font: inherit; font-weight: 600; background: var(--accent); color: var(--on-accent); border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: progress; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 480px) { .row { grid-template-columns: 1fr; } }
+  #status { margin: 20px 0 8px; color: var(--muted); min-height: 1.5em; }
+  #status.err { color: var(--accent); }
+  ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+  li { position: relative; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; display: flex; justify-content: space-between; overflow: hidden; }
+  li span { position: relative; }
+  li .w { font-variant-numeric: tabular-nums; color: var(--muted); }
+  h2 { font-size: 1rem; margin: 28px 0 8px; }
+  ol { padding-left: 1.5em; margin: 0; display: grid; gap: 6px; }
+  ol li { display: list-item; }
+  ol li::before { content: none; }
+  .why { color: var(--muted); font-size: .875rem; }
+  li::before { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--w); background: var(--bar); opacity: .5; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Feed → tags</h1>
+  <p class="sub">Upload Instagram Explore screenshots. Each tile goes to Muse Spark, and the tags are merged.</p>
+  <form id="f">
+    <label>Screenshots <input type="file" name="files" accept="image/*" multiple required></label>
+    <div class="row">
+      <label>API <input type="text" id="api" value="http://localhost:8000" spellcheck="false"></label>
+      <label>User name <input type="text" id="user" value="demo" spellcheck="false"></label>
+    </div>
+    <button type="submit">Read tags</button>
+  </form>
+  <p id="status" role="status" aria-live="polite"></p>
+  <ul id="tags"></ul>
+  <h2 id="recs-h" hidden>Top 5 films</h2>
+  <ol id="recs"></ol>
+</main>
+<script>
+  const form = document.getElementById("f"), status = document.getElementById("status"), list = document.getElementById("tags");
+  const recs = document.getElementById("recs"), recsH = document.getElementById("recs-h");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = form.querySelector("button");
+    btn.disabled = true; list.replaceChildren(); recs.replaceChildren(); recsH.hidden = true; status.className = "";
+    status.textContent = "Reading screenshots… (one Muse call per tile, can take a while)";
+    try {
+      const api = document.getElementById("api").value.replace(/\/$/, "");
+      const headers = { Authorization: "Bearer " + document.getElementById("user").value };
+      const res = await fetch(api + "/feeds", { method: "POST", body: new FormData(form), headers });
+      const body = await res.json();
+      if (!res.ok) throw new Error(`${res.status}: ${body.detail ?? JSON.stringify(body)}`);
+      const tags = Object.entries(body.tags);
+      status.textContent = `${tags.length} tags, ${body.dropped_as_noise} tile(s) dropped as ads/noise. Saved as feed ${body.feed_id}.`;
+      for (const [tag, w] of tags) {
+        const li = document.createElement("li");
+        li.style.setProperty("--w", `${Math.min(w, 1) * 100}%`);
+        li.innerHTML = "<span></span><span class='w'></span>";
+        li.children[0].textContent = tag; li.children[1].textContent = w.toFixed(2);
+        list.append(li);
+      }
+      const r = await fetch(`${api}/dev/feeds/${body.feed_id}/top?k=5`, { headers });
+      if (!r.ok) throw new Error(`recs ${r.status}: ${(await r.json().catch(() => ({}))).detail ?? "server needs TANDEM_DEV_AUTH=1"}`);
+      const top = await r.json();
+      recsH.textContent = `Top 5 films (untrained W + popularity ${top.pop})`;
+      for (const m of top.recs) {
+        const li = document.createElement("li");
+        li.innerHTML = "<strong></strong> <span class='why'></span>";
+        li.children[0].textContent = `${m.title}${m.year ? ` (${m.year})` : ""}`;
+        li.children[1].textContent = `${m.score.toFixed(2)}${m.because_of.length ? " · because " + m.because_of.join(", ") : ""}`;
+        recs.append(li);
+      }
+      recsH.hidden = false;
+    } catch (err) {
+      status.className = "err"; status.textContent = "Failed: " + err.message;
+    } finally { btn.disabled = false; }
+  });
+</script>
+</body>
+</html>
