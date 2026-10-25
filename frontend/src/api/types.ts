@@ -79,6 +79,7 @@ export interface Snapshot {
   why: { who: string; tag: string }[]; // whose feed pushed the current trailer up
   trailerStartedAt: number | null;
   trailerMs: number; // this trailer's length: the real video's once it plays, else TRAILER_MS
+  pausedAt: number | null; // set while the TV has the trailer paused
   locked: string[];
   outcome: Outcome | null;
   shown: number[]; // movie ids, in the order they played

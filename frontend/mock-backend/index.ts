@@ -26,6 +26,8 @@ interface State {
   why: Snapshot['why'];
   trailerStartedAt: number | null;
   trailerMs: number;
+  pausedAt: number | null;
+  realTrailer: boolean; // the TV is playing a real video, so it ends the trailer
   votes: Record<string, Vote>; // private: never sent to clients
   outcome: Snapshot['outcome'];
   history: Round[]; // private: yes/no counts
@@ -43,6 +45,8 @@ const fresh = (): State => ({
   why: [],
   trailerStartedAt: null,
   trailerMs: TRAILER_MS,
+  pausedAt: null,
+  realTrailer: false,
   votes: {},
   outcome: null,
   history: [],
@@ -124,6 +128,8 @@ function startTrailer() {
   s.phase = 'trailer';
   s.trailerStartedAt = Date.now();
   s.trailerMs = TRAILER_MS;
+  s.pausedAt = null;
+  s.realTrailer = false;
   s.votes = {};
   s.outcome = null;
   schedule(openVoting, TRAILER_MS);
@@ -204,9 +210,26 @@ const actions: Record<string, (body: Record<string, string>) => unknown> = {
   // video. The TV ends it when the video does; the timer is only a backstop.
   trailerPlaying({ round, ms, at }) {
     if (s.phase !== 'trailer' || Number(round) !== s.round) return;
+    if (s.pausedAt) return;
     s.trailerMs = Number(ms);
     s.trailerStartedAt = Date.now() - Number(at);
+    s.realTrailer = true;
     schedule(openVoting, s.trailerMs - Number(at) + TRAILER_GRACE_MS);
+  },
+  // Pausing freezes the trailer clock and holds the timer; resuming shifts the
+  // start by however long it sat paused.
+  pauseTrailer() {
+    if (s.phase !== 'trailer' || s.pausedAt) return;
+    s.pausedAt = Date.now();
+    clearTimeout(timer);
+  },
+  resumeTrailer() {
+    if (s.phase !== 'trailer' || !s.pausedAt) return;
+    const now = Date.now();
+    s.trailerStartedAt! += now - s.pausedAt;
+    s.pausedAt = null;
+    const left = s.trailerMs - (now - s.trailerStartedAt!);
+    schedule(openVoting, left + (s.realTrailer ? TRAILER_GRACE_MS : 0));
   },
   endTrailer({ round }) {
     if (s.phase === 'trailer' && (round === undefined || Number(round) === s.round)) openVoting();
@@ -309,6 +332,7 @@ function snapshot(): Snapshot {
     why: s.why,
     trailerStartedAt: s.trailerStartedAt,
     trailerMs: s.trailerMs,
+    pausedAt: s.pausedAt,
     locked: Object.keys(s.votes),
     outcome: s.outcome,
     shown: s.shown,
