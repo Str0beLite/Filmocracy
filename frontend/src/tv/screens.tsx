@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowRight, Check, Pause, Play, RotateCcw, SkipForward, Star } from 'lucide-react';
 import { CHECKPOINT_EVERY, FEELINGS, MISS_MS, act, movie, type Movie, type Snapshot } from '../api';
-import { ActionButton, Avatar, CompletionStatus, Confetti, LivePill, PickSource, Poster, QR, Seat, Wildcard, Wordmark } from '../components/ui';
+import { ActionButton, Avatar, CompletionStatus, Confetti, FilmMeta, LivePill, PickSource, Poster, QR, Seat, Wildcard, Wordmark } from '../components/ui';
 import { FEELING_ICONS } from '../lib/feelings';
 import { completion, fmtTime, joinUrl, trailerProgress } from '../lib/night';
 import { gsap, useMotion } from '../lib/motion';
@@ -220,7 +220,7 @@ export function TVTrailer() {
       <div className="trailer-info">
         <h1 className="trailer-title display">{film.title}</h1>
         <p className="trailer-meta">
-          {film.year} · {film.runtime} · {film.genres.join(', ')}
+          <FilmMeta movie={film} />
         </p>
         <div className="why">
           <span className="why-label">Why it’s here</span>
@@ -419,9 +419,9 @@ export function TVBuzzer() {
         <div className="buzzer-pick">
           <h2 className="display">{film.title}</h2>
           <p className="buzzer-meta">
-            {film.year} · {film.runtime} · {film.genres.join(', ')}
+            <FilmMeta movie={film} />
           </p>
-          <p className="buzzer-logline">{film.logline}</p>
+          {film.logline && <p className="buzzer-logline">{film.logline}</p>}
           <div className="buzzer-crew">
             {seatedOf(s).map((p) => (
               <span key={p.id}>
@@ -482,7 +482,7 @@ export function TVPicks() {
                 <span className="pick-rank">{i + 1}</span>
                 <h3 className="display">{film.title}</h3>
                 <p className="pick-meta">
-                  {film.year} · {film.genres.join(', ')}
+                  <FilmMeta movie={film} runtime={false} />
                 </p>
                 {film.wildcard && <Wildcard />}
                 <PickSource source={p.source} />

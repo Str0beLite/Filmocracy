@@ -31,7 +31,8 @@ class SessionStore:
         with self.transaction() as db:
             for idx, movie in enumerate(catalog.movies):
                 db.execute(
-                    "INSERT OR IGNORE INTO tandem_movies VALUES (?,?,?,?,?,?)",
+                    "INSERT INTO tandem_movies VALUES (?,?,?,?,?,?) "
+                    "ON CONFLICT(id) DO UPDATE SET title=excluded.title",  # catalog title fixes reach old databases
                     (
                         movie["id"],
                         movie.get("tmdb_id"),

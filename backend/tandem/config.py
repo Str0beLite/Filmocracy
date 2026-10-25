@@ -53,6 +53,7 @@ TEMPERATURE = _env("TANDEM_TEMPERATURE", 0.02, float)   # Gumbel noise on every 
 POSITIVE_LABELS = {"love", "seen_loved", "favourite"}
 NEGATIVE_LABELS = {"nah", "seen_disliked"}
 TAG_BOOST = _env("TANDEM_TAG_BOOST", 0.3, float)   # added to films carrying a boosted tag (each voter's feeling, or the host's): ~86% of one person's picks fit their mood. Real nights: mood-matching films got 86% yes vs 27%
+RECENCY_WEIGHT = _env("TANDEM_RECENCY_WEIGHT", 0.4, float)   # preference for newer films (catalog.recency, 0 oldest -> 1 newest): median pick 1998 -> 2016, for ~21% taste match
 POP_INIT = _env("TANDEM_POP_INIT", 0.1, float)      # starting weight on the popularity prior; training learns it from there (up to POP_MAX)
 POP_MAX = _env("TANDEM_POP_MAX", 0.1, float)       # cap on that weight, so hits can't crowd out the rest. Real votes favour known films (popularity alone: AUC 0.67); 0.1 puts the median pick at the ~81st rating-count percentile, near where real yes votes sit
 VOTE_PULL = _env("TANDEM_VOTE_PULL", 0.1, float)    # each vote (up to 10) pulls the taste this far toward loved films, before any retrain

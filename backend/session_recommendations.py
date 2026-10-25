@@ -158,7 +158,7 @@ class SessionRecommendations:
         return self.aggregate(
             [
                 boost(
-                    score_feed(model, f["x"], cat.vecs, cat.prior, *self.store.votes(f["id"])),
+                    score_feed(model, f["x"], cat.vecs, cat.prior, *self.store.votes(f["id"]), recency=cat.recency),
                     cat.movies,
                     FEELING_BOOST.get(feeling, []),
                 )
@@ -212,7 +212,7 @@ class SessionRecommendations:
             version, model = self.state["trainer"].current()
             votes = await asyncio.to_thread(self.store.votes, fid)
             scores = await asyncio.to_thread(
-                score_feed, model, feed["x"], cat.vecs, cat.prior, *votes
+                score_feed, model, feed["x"], cat.vecs, cat.prior, *votes, recency=cat.recency
             )
             scores = boost(scores, cat.movies, boost_tags)
             if not np.isfinite(scores).all():
