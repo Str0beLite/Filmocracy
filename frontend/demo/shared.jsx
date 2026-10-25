@@ -1,8 +1,17 @@
 // Pieces both screens use: icons, avatars, seats, posters, the QR code,
-// confetti and a ticking clock for trailer progress.
+// confetti, the completion bar and a ticking clock.
 
 function displayName(person, s) {
   return person.id === 'you' ? s.youName.trim() || 'You' : person.name;
+}
+
+function moodOf(person, s) {
+  const id = person.id === 'you' ? s.youMood : person.mood;
+  return D.moods.find((m) => m.id === id) || null;
+}
+
+function listNames(names) {
+  return names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
 }
 
 function seatStatus(person, s) {
@@ -112,8 +121,13 @@ function Badge({ kind }) {
 }
 
 // A theater seat with someone (or no one yet) in it. `children` float above it.
-function Seat({ person, s, status = 'seated', badge, size = 'lg', showVibe = false, children }) {
-  const vibe = { seated: person.vibe, joining: 'Joining…', away: 'Not here yet' }[status];
+function Seat({ person, s, status = 'seated', badge, size = 'lg', showMood = false, children }) {
+  const mood = moodOf(person, s);
+  const caption = {
+    seated: mood ? `${mood.emoji} ${mood.short}` : '',
+    joining: 'Joining…',
+    away: 'Not here yet',
+  }[status];
   return (
     <div className={`seat seat--${size} is-${status} ${badge ? `has-${badge}` : ''}`}>
       {children}
@@ -123,9 +137,45 @@ function Seat({ person, s, status = 'seated', badge, size = 'lg', showVibe = fal
       </div>
       <div className="seat-cushion" />
       <div className="seat-name">{displayName(person, s)}</div>
-      {showVibe && <div className="seat-vibe">{vibe}</div>}
+      {showMood && <div className="seat-mood">{caption}</div>}
     </div>
   );
+}
+
+// Loading bar for how close the night is to a movie.
+function CompletionStatus({ value, className = '' }) {
+  const done = value >= 100;
+  return (
+    <div
+      className={`status ${done ? 'is-done' : ''} ${className}`}
+      role="progressbar"
+      aria-label="Completion status"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={value}
+    >
+      <div className="status-head">
+        <span>Completion status</span>
+        <b>{done ? 'Done' : `${value}%`}</b>
+      </div>
+      <div className="status-track">
+        <i style={{ width: `${value}%` }} />
+      </div>
+    </div>
+  );
+}
+
+// Where a pick came from. Never how anyone voted.
+function PickStatus({ pick: p }) {
+  if (!p.round) return <span className="pick-status is-predicted">Predicted for your group</span>;
+  if (p.round.unanimous) {
+    return (
+      <span className="pick-status is-gold">
+        <Icon name="star" /> Golden buzzer
+      </span>
+    );
+  }
+  return <span className="pick-status">From tonight's trailers</span>;
 }
 
 // Placeholder poster art built from the movie's palette.

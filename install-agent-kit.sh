@@ -34,7 +34,13 @@ while [ $# -gt 0 ]; do
 done
 
 command -v git >/dev/null || { echo "git is required" >&2; exit 1; }
-command -v python3 >/dev/null || echo "WARN: python3 not on PATH. webapp-testing's scripts need it (plus playwright)."
+# Find a Python 3 that actually runs: on Windows, `python3` is often a Microsoft
+# Store stub that exists on PATH but can't execute, while `python` is the real one.
+PY=""
+for c in python3 python; do
+  if "$c" -c 'import sys; sys.exit(sys.version_info[0] != 3)' >/dev/null 2>&1; then PY="$c"; break; fi
+done
+[ -n "$PY" ] || echo "WARN: no working Python 3 found. webapp-testing's scripts need it (plus playwright)."
 
 mkdir -p "$TARGET"
 TARGET="$(cd "$TARGET" && pwd)"
@@ -225,7 +231,7 @@ EXTRA=""
 write_block "$TARGET/AGENTS.md" "<!-- hackathon-kit:start -->
 ## Skill kit (.agents/skills)
 Core skills: grill-with-docs (uses grilling + domain-modeling), ponytail, impeccable, gsap-react, gsap-scrolltrigger, webapp-testing, systematic-debugging, web-design-guidelines, verification-before-completion.
-- Follow the ponytail skill at LITE level for the whole session.
+- Follow the ponytail skill at LITE level for the whole session.${EXTRA}
 
 Before calling the work done: review every UI file against the web-design-guidelines skill and fix what it finds, then follow verification-before-completion (fresh build + lint, read the exit codes).
 <!-- hackathon-kit:end -->"
@@ -246,12 +252,12 @@ Claude Code: skills live in .claude/skills. Use \`/ponytail lite\` at the start 
   # Impeccable's design detector: per-edit checks + a deep pass on Stop. Shared, so every Claude user gets it.
   SETTINGS="$TARGET/.claude/settings.json"
   if [ ! -f "$SETTINGS" ]; then
-    python3 -c 'import json,sys; s=json.load(open(sys.argv[1])); s.pop("description",None); json.dump(s,open(sys.argv[2],"w"),indent=2)' \
-      "$TMP/impeccable/.claude/settings.json" "$SETTINGS" 2>/dev/null \
+    { [ -n "$PY" ] && "$PY" -c 'import json,sys; s=json.load(open(sys.argv[1])); s.pop("description",None); json.dump(s,open(sys.argv[2],"w"),indent=2)' \
+      "$TMP/impeccable/.claude/settings.json" "$SETTINGS" 2>/dev/null; } \
       || grep -v '"description"' "$TMP/impeccable/.claude/settings.json" >"$SETTINGS"
     echo "settings.json: Impeccable hooks added"
-  elif command -v python3 >/dev/null; then
-    python3 - "$TMP/impeccable/.claude/settings.json" "$SETTINGS" <<'PY'
+  elif [ -n "$PY" ]; then
+    "$PY" - "$TMP/impeccable/.claude/settings.json" "$SETTINGS" <<'PY'
 import json, sys
 src = json.load(open(sys.argv[1]))["hooks"]
 dst = json.load(open(sys.argv[2]))
@@ -263,7 +269,7 @@ json.dump(dst, open(sys.argv[2], "w"), indent=2)
 PY
     echo "settings.json: Impeccable hooks merged"
   else
-    echo "WARN: .claude/settings.json exists and python3 is missing; Impeccable hooks not added."
+    echo "WARN: .claude/settings.json exists and no working Python 3 was found; Impeccable hooks not added."
   fi
 fi
 

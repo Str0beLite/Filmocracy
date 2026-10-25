@@ -1,15 +1,18 @@
-// The big screen: lobby with QR, trailer, verdict, golden buzzer.
+// The big screen: lobby with QR, trailer, verdict, golden buzzer, top picks.
+// It's the only screen that moves the night forward; phones just play along.
 
 function TV({ night }) {
-  const { s, unanimous } = night;
+  const { s, unanimous, completion } = night;
   const view =
     s.phase === 'lobby'
       ? 'lobby'
       : s.phase === 'showing'
         ? 'showing'
-        : s.phase === 'result' && unanimous
-          ? 'buzzer'
-          : 'trailer';
+        : s.phase === 'picks'
+          ? 'picks'
+          : s.phase === 'result' && unanimous
+            ? 'buzzer'
+            : 'trailer';
   return (
     <div className={`tv is-${view}`}>
       <div className="tv-bezel">
@@ -17,8 +20,12 @@ function TV({ night }) {
           {view === 'lobby' && <TVLobby night={night} />}
           {view === 'trailer' && <TVTrailer key={s.movieIdx} night={night} />}
           {view === 'buzzer' && <TVBuzzer night={night} />}
+          {view === 'picks' && <TVPicks night={night} />}
           {view === 'showing' && <TVShowing night={night} />}
-          <Curtains open={view === 'trailer' || view === 'showing'} />
+          <Curtains open={view !== 'lobby'} />
+          {view !== 'showing' && (
+            <CompletionStatus value={completion} className={`tv-hud ${view === 'lobby' ? 'is-lobby' : ''}`} />
+          )}
         </div>
       </div>
       <div className="tv-stand" />
@@ -54,11 +61,12 @@ function TVLobby({ night }) {
           <p className="eyebrow">Room {D.room.code}</p>
           <h1 className="lobby-title">Grab a seat.</h1>
           <p className="lobby-sub">
-            Scan the code with your phone. Tandem reads the room's taste and plays trailers you might all say yes to.
+            Scan the code, tell Tandem how you want to feel tonight, and it plays trailers it thinks you'll all say
+            yes to.
           </p>
           <ol className="lobby-steps">
             <li><b>1</b>Scan</li>
-            <li><b>2</b>Connect Instagram</li>
+            <li><b>2</b>Pick a feeling</li>
             <li><b>3</b>Vote on trailers</li>
           </ol>
         </div>
@@ -71,7 +79,7 @@ function TVLobby({ night }) {
       <div className="lobby-foot">
         <div className="seat-row">
           {D.people.map((p) => (
-            <Seat key={p.id} person={p} s={s} status={seatStatus(p, s)} showVibe />
+            <Seat key={p.id} person={p} s={s} status={seatStatus(p, s)} showMood />
           ))}
         </div>
         <button className="tv-btn tv-btn--primary" disabled={!everyoneSeated} onClick={start}>
@@ -89,7 +97,7 @@ function TVLobby({ night }) {
 }
 
 function TVTrailer({ night }) {
-  const { s, movie } = night;
+  const { s, movie, dispatch } = night;
   const now = useNow(s.phase === 'trailer');
   const p = trailerProgress(s, now);
   const shot = Math.min(2, Math.floor(p * 3));
@@ -97,6 +105,7 @@ function TVTrailer({ night }) {
   const names = D.people.map((person) => displayName(person, s));
   const [c1, c2, c3] = movie.palette;
   const byId = Object.fromEntries(D.people.map((person) => [person.id, person]));
+  const fits = [...new Set(D.people.map((person) => moodOf(person, s)))].filter((m) => m && movie.moods.includes(m.id));
 
   return (
     <div className={`trailer ${verdict ? 'is-verdict' : ''}`} style={{ '--c1': c1, '--c2': c2, '--c3': c3 }}>
@@ -106,9 +115,7 @@ function TVTrailer({ night }) {
         ))}
         <div className="vignette" />
         <div className="grain" />
-        <p className={`scene-caption ${p < 0.22 ? 'is-on' : ''}`}>
-          Picked for {names.slice(0, -1).join(', ')} & {names[names.length - 1]}
-        </p>
+        <p className={`scene-caption ${p < 0.22 ? 'is-on' : ''}`}>Picked for {listNames(names)}</p>
         <div className={`title-card ${p > 0.45 && p < 0.8 ? 'is-on' : ''}`}>
           <h3>{movie.title}</h3>
           <span>{movie.year}</span>
@@ -119,9 +126,8 @@ function TVTrailer({ night }) {
 
       <div className="trailer-top">
         <span className="chip">
-          <Icon name="play" /> Trailer {s.movieIdx + 1} · <b>{movie.match}% group match</b>
+          <Icon name="play" /> Trailer {s.movieIdx + 1} of {D.movies.length} · <b>{movie.match}% group match</b>
         </span>
-        <Wordmark />
       </div>
 
       <div className="trailer-info">
@@ -131,6 +137,12 @@ function TVTrailer({ night }) {
         </p>
         <div className="why">
           <span className="why-label">Why it's here</span>
+          {fits.length > 0 && (
+            <span className="chip">
+              <span className="chip-emoji">{fits.map((m) => m.emoji).join('')}</span>
+              Fits tonight's mood
+            </span>
+          )}
           {movie.why.map((w) => (
             <span className="chip" key={w.who}>
               <Avatar person={byId[w.who]} s={s} />
@@ -145,6 +157,9 @@ function TVTrailer({ night }) {
           <span>
             {fmtTime(p * TRAILER_MS)} / {fmtTime(TRAILER_MS)}
           </span>
+          <button className="tv-btn tv-btn--ghost tv-btn--sm" onClick={() => dispatch({ type: 'endTrailer' })}>
+            Skip to vote <Icon name="skip" />
+          </button>
         </div>
       </div>
 
@@ -167,27 +182,32 @@ function TVTrailer({ night }) {
   );
 }
 
+// Seats only ever show who has voted, never how.
 function TVVerdict({ night }) {
-  const { s, movie, voteCount, yesCount, revealOrder } = night;
+  const { s, movie, voteCount, hasNext } = night;
   const total = D.people.length;
   const stage = s.phase === 'result' ? 'miss' : s.phase;
   const copy = {
     voting: { eyebrow: "Trailer's over", title: 'Vote on your phone', sub: `${voteCount} of ${total} locked in` },
     reveal: { eyebrow: movie.title, title: 'The verdict…', sub: 'Everyone has to say yes' },
-    miss: { eyebrow: 'No golden buzzer this time', title: `So close. ${yesCount} of ${total}.`, sub: 'Next trailer coming up' },
+    miss: {
+      eyebrow: movie.title,
+      title: 'Not this one.',
+      sub: hasNext ? 'No golden buzzer. Tuning the next pick…' : "No golden buzzer. Ranking tonight's picks…",
+    },
   }[stage];
 
   return (
     <div className={`verdict verdict--${stage}`}>
       <p className="eyebrow">{copy.eyebrow}</p>
       <h2 className="verdict-title">{copy.title}</h2>
-      <div className="seat-row">
-        {D.people.map((p) => {
-          const shown = stage !== 'voting' && revealOrder.indexOf(p.id) < s.revealed;
-          const badge = shown ? s.votes[p.id] : s.votes[p.id] ? 'locked' : 'thinking';
-          return <Seat key={p.id} person={p} s={s} badge={badge} />;
-        })}
-      </div>
+      {stage !== 'miss' && (
+        <div className="seat-row">
+          {D.people.map((p) => (
+            <Seat key={p.id} person={p} s={s} badge={s.votes[p.id] ? 'locked' : 'thinking'} />
+          ))}
+        </div>
+      )}
       <p className="verdict-sub">{copy.sub}</p>
       {stage === 'miss' && <div className="countdown" style={{ animationDuration: `${MISS_PAUSE_MS}ms` }} />}
     </div>
@@ -195,15 +215,13 @@ function TVVerdict({ night }) {
 }
 
 function TVBuzzer({ night }) {
-  const { s, movie, dispatch, nextTrailer } = night;
+  const { s, movie, dispatch, nextTrailer, hasNext } = night;
   return (
     <div className="buzzer">
       <div className="buzzer-rays" />
       <Confetti count={90} />
       <div className="buzzer-head">
-        <p className="eyebrow">
-          {D.people.length} of {D.people.length} said yes
-        </p>
+        <p className="eyebrow">Everyone's in</p>
         <h1 className="buzzer-title gold-text">Golden Buzzer</h1>
       </div>
       <div className="buzzer-body">
@@ -224,14 +242,65 @@ function TVBuzzer({ night }) {
             ))}
           </div>
           <div className="buzzer-actions">
-            <button className="tv-btn tv-btn--gold" onClick={() => dispatch({ type: 'showMovie' })}>
-              <Icon name="play" /> Start the movie
+            <button className="tv-btn tv-btn--gold" onClick={() => dispatch({ type: 'showPicks' })}>
+              See tonight's picks <Icon name="arrow" />
             </button>
-            <button className="tv-btn tv-btn--ghost" onClick={nextTrailer}>
-              Keep browsing
-            </button>
+            {hasNext && (
+              <button className="tv-btn tv-btn--ghost" onClick={nextTrailer}>
+                Keep browsing
+              </button>
+            )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function TVPicks({ night }) {
+  const { picks, dispatch } = night;
+  const top = picks.slice(0, 3);
+  return (
+    <div className="picks">
+      <div className="picks-head">
+        <div>
+          <p className="eyebrow">Tonight's picks</p>
+          <h1 className="picks-title">Your group's top 3</h1>
+        </div>
+        <button className="tv-btn tv-btn--gold" onClick={() => dispatch({ type: 'showMovie', movie: top[0].movie })}>
+          <Icon name="play" /> Start #1
+        </button>
+      </div>
+
+      <ol className="podium">
+        {top.map((p, i) => (
+          <li key={p.movie.id} className={`pick ${i === 0 ? 'pick--first' : ''}`}>
+            <Poster movie={p.movie} />
+            <div className="pick-info">
+              <span className="pick-rank">{i + 1}</span>
+              <h3>{p.movie.title}</h3>
+              <p className="pick-meta">
+                {p.movie.year} · {p.movie.genres.join(', ')}
+              </p>
+              <PickStatus pick={p} />
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <div className="recs">
+        <p className="eyebrow">5 more for your group</p>
+        <ol className="recs-row">
+          {D.predicted.map((m) => (
+            <li key={m.id} className="rec">
+              <Poster movie={m} />
+              <div>
+                <b>{m.title}</b>
+                <span>{m.match}% match</span>
+              </div>
+            </li>
+          ))}
+        </ol>
       </div>
     </div>
   );
@@ -241,7 +310,7 @@ function TVShowing({ night }) {
   return (
     <div className="showing">
       <p className="eyebrow">Now showing</p>
-      <h2>{night.movie.title}</h2>
+      <h2>{night.s.nowShowing.title}</h2>
       <p className="showing-sub">Lights down. Phones away.</p>
     </div>
   );

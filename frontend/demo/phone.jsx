@@ -1,4 +1,5 @@
-// The phone: scan in, connect Instagram, see your vibe, react, vote.
+// The phone: scan in, pick tonight's feeling, connect Instagram, react, vote.
+// Once seated, a phone never moves the night forward; the big screen does.
 
 function phoneScreen({ s, unanimous }) {
   if (s.phoneStep !== 'seated') return s.phoneStep;
@@ -13,6 +14,8 @@ function phoneScreen({ s, unanimous }) {
       return 'waiting';
     case 'result':
       return unanimous ? 'buzzer' : 'miss';
+    case 'picks':
+      return 'picks';
     default:
       return 'showing';
   }
@@ -70,6 +73,16 @@ function RoomPill() {
   );
 }
 
+// Shown wherever a phone is waiting on the big screen.
+function WaitingNote({ children }) {
+  return (
+    <p className="waiting-note">
+      <Badge kind="thinking" />
+      {children}
+    </p>
+  );
+}
+
 function PhoneScan({ night }) {
   const scan = () => night.dispatch({ type: 'scan' });
   return (
@@ -95,6 +108,42 @@ function PhoneScan({ night }) {
         </button>
         <button className="btn btn-ghost" onClick={scan}>
           Enter room code
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function PhoneMood({ night }) {
+  const { s, dispatch } = night;
+  return (
+    <section className="ps ps--mood">
+      <RoomPill />
+      <h1 className="ps-title">How do you want to feel tonight?</h1>
+      <p className="ps-sub">Tandem blends everyone's answer with what you all like on Instagram.</p>
+      <div className="mood-grid" role="radiogroup" aria-label="Tonight's feeling">
+        {D.moods.map((m) => (
+          <button
+            key={m.id}
+            role="radio"
+            aria-checked={s.youMood === m.id}
+            className="mood"
+            onClick={() => dispatch({ type: 'setMood', mood: m.id })}
+          >
+            <span className="mood-emoji" aria-hidden="true">
+              {m.emoji}
+            </span>
+            {m.label}
+          </button>
+        ))}
+      </div>
+      <div className="ps-foot">
+        <button
+          className="btn btn-primary"
+          disabled={!s.youMood}
+          onClick={() => dispatch({ type: 'phoneStep', step: 'connect' })}
+        >
+          Continue <Icon name="arrow" />
         </button>
       </div>
     </section>
@@ -142,10 +191,10 @@ function PhoneAnalyzing({ night }) {
       <div className="orb">
         <Avatar person={you} s={night.s} />
       </div>
-      <h1 className="ps-title">Reading your vibe…</h1>
+      <h1 className="ps-title">Reading your feed…</h1>
       <ul className="signals">
         {D.you.signals.map((text, i) => (
-          <li key={text} style={{ animationDelay: `${0.3 + i * 0.75}s` }}>
+          <li key={text} style={{ animationDelay: `${0.3 + i * 0.7}s` }}>
             <Icon name="check" />
             {text}
           </li>
@@ -155,77 +204,51 @@ function PhoneAnalyzing({ night }) {
   );
 }
 
-function PhoneVibe({ night }) {
-  const { dispatch } = night;
-  const vibe = D.you.vibe;
-  const takeSeat = () => {
-    dispatch({ type: 'seat', id: 'you' });
-    dispatch({ type: 'phoneStep', step: 'seated' });
-  };
-  return (
-    <section className="ps ps--vibe">
-      <p className="eyebrow">Your movie vibe</p>
-      <div className="vibe-card">
-        <h1 className="vibe-title">{vibe.title}</h1>
-        <p>{vibe.blurb}</p>
-        <div className="traits">
-          {vibe.traits.map(([label, value], i) => (
-            <div className="trait" key={label}>
-              <span>{label}</span>
-              <span className="bar">
-                <i style={{ width: `${value}%`, animationDelay: `${0.15 + i * 0.12}s` }} />
-              </span>
-              <b>{value}</b>
-            </div>
-          ))}
-        </div>
-        <div className="tags">
-          {vibe.tags.map((t) => (
-            <span className="tag" key={t}>
-              {t}
-            </span>
-          ))}
-        </div>
-      </div>
-      <div className="ps-foot">
-        <button className="btn btn-primary" onClick={takeSeat}>
-          Take my seat <Icon name="arrow" />
-        </button>
-      </div>
-    </section>
-  );
-}
+const HOW_IT_WORKS = [
+  { icon: '🎬', text: 'Trailers play on the big screen' },
+  { icon: '🔥', text: 'Tap emotes to react live' },
+  { icon: '🗳️', text: 'Vote yes or no when each one ends. Your vote stays private.' },
+  { icon: '⭐', text: 'Everyone says yes: golden buzzer' },
+];
 
 function PhoneLobby({ night }) {
-  const { s, everyoneSeated, start } = night;
+  const { s } = night;
   const missing = D.people.filter((p) => !s.seated.includes(p.id));
   return (
     <section className="ps ps--lobby">
       <RoomPill />
       <h1 className="ps-title">You're in.</h1>
-      <p className="ps-sub">Trailers play on the big screen. You react and vote from here.</p>
-      <ul className="crew">
+      <p className="ps-sub">Sit back. The show starts from the big screen.</p>
+      <ol className="howto">
+        {HOW_IT_WORKS.map((step) => (
+          <li key={step.icon}>
+            <span className="howto-icon" aria-hidden="true">
+              {step.icon}
+            </span>
+            {step.text}
+          </li>
+        ))}
+      </ol>
+      <div className="crew-strip">
         {D.people.map((p) => {
-          const here = s.seated.includes(p.id);
+          const mood = moodOf(p, s);
           return (
-            <li key={p.id} className={here ? '' : 'is-away'}>
-              <Avatar person={p} s={s} />
-              <span className="crew-who">
-                <b>
-                  {displayName(p, s)}
-                  {p.id === 'you' && ' (you)'}
-                </b>
-                <span>{here ? p.vibe : 'Not here yet'}</span>
+            <span key={p.id} className={`crew-member ${s.seated.includes(p.id) ? '' : 'is-away'}`}>
+              <span className="crew-avatar">
+                <Avatar person={p} s={s} />
+                {mood && <span className="crew-mood">{mood.emoji}</span>}
               </span>
-              {here ? <Icon name="check" className="crew-status" /> : <Badge kind="thinking" />}
-            </li>
+              <small>{displayName(p, s)}</small>
+            </span>
           );
         })}
-      </ul>
+      </div>
       <div className="ps-foot">
-        <button className="btn btn-primary" disabled={!everyoneSeated} onClick={start}>
-          {everyoneSeated ? 'Start the show' : `Waiting for ${missing.map((p) => p.name).join(' & ')}…`}
-        </button>
+        <WaitingNote>
+          {missing.length
+            ? `Waiting for ${listNames(missing.map((p) => p.name))} to join`
+            : 'Waiting for the big screen to start the show'}
+        </WaitingNote>
       </div>
     </section>
   );
@@ -249,7 +272,7 @@ function NowPlaying({ movie, progress }) {
 }
 
 function PhoneReact({ night }) {
-  const { s, movie, react, dispatch } = night;
+  const { s, movie, react } = night;
   const now = useNow(s.phase === 'trailer');
   const [bursts, setBursts] = useState([]);
   const send = (emote, idx) => {
@@ -278,10 +301,7 @@ function PhoneReact({ night }) {
         ))}
       </div>
       <div className="ps-foot">
-        <p className="fineprint">Voting opens when the trailer ends.</p>
-        <button className="btn btn-ghost" onClick={() => dispatch({ type: 'endTrailer' })}>
-          Skip to the vote
-        </button>
+        <WaitingNote>Voting opens when the trailer ends</WaitingNote>
       </div>
     </section>
   );
@@ -312,24 +332,22 @@ function PhoneVote({ night }) {
           <span>Pass</span>
         </button>
       </div>
-      <p className="fineprint">Everyone has to say yes for the golden buzzer.</p>
+      <p className="fineprint">Your vote stays private. Everyone has to say yes for the golden buzzer.</p>
     </section>
   );
 }
 
+// Shows your own vote and who has voted, never what anyone else picked.
 function PhoneWaiting({ night }) {
   const { s, voteCount } = night;
   const mine = s.votes.you;
   const left = D.people.length - voteCount;
-  const status =
-    s.phase === 'reveal' ? 'Revealing on the big screen…' : left > 0 ? `Waiting on ${left} more…` : 'Everyone is locked in.';
   return (
     <section className="ps ps--waiting">
       <div className={`my-vote my-vote--${mine}`}>
         <Icon name={mine === 'yes' ? 'check' : 'cross'} />
       </div>
       <h1 className="ps-title">{mine === 'yes' ? "You're in." : 'You passed.'}</h1>
-      <p className="ps-sub">{status}</p>
       <div className="lock-row">
         {D.people.map((p) => (
           <span key={p.id} className={`slot ${s.votes[p.id] ? 'is-locked' : ''}`}>
@@ -338,58 +356,80 @@ function PhoneWaiting({ night }) {
           </span>
         ))}
       </div>
+      <div className="ps-foot">
+        <WaitingNote>{s.phase === 'reveal' ? 'The verdict is on the big screen' : `Waiting on ${left} more`}</WaitingNote>
+      </div>
     </section>
   );
 }
 
 function PhoneMiss({ night }) {
-  const { s, movie, yesCount, revealOrder } = night;
-  const byId = Object.fromEntries(D.people.map((p) => [p.id, p]));
+  const { movie, hasNext } = night;
   return (
     <section className="ps ps--miss">
+      <div className="miss-icon" aria-hidden="true">
+        🎞️
+      </div>
       <p className="eyebrow">{movie.title}</p>
       <h1 className="ps-title">Not this one.</h1>
-      <p className="ps-sub">
-        {yesCount} of {D.people.length} said yes. No golden buzzer, no hard feelings.
-      </p>
-      <div className="tally">
-        {revealOrder.map((id) => (
-          <span key={id} className={`tally-seat is-${s.votes[id]}`}>
-            <Avatar person={byId[id]} s={s} />
-            <Icon name={s.votes[id] === 'yes' ? 'check' : 'cross'} />
-          </span>
-        ))}
-      </div>
+      <p className="ps-sub">Not everyone was in, so no golden buzzer. Tandem is tuning the next pick.</p>
       <div className="ps-foot">
         <div className="countdown" style={{ animationDuration: `${MISS_PAUSE_MS}ms` }} />
-        <p className="fineprint">Next trailer coming up…</p>
+        <p className="fineprint">{hasNext ? 'Next trailer coming up…' : "Ranking tonight's picks…"}</p>
       </div>
     </section>
   );
 }
 
 function PhoneBuzzer({ night }) {
-  const { movie, dispatch, nextTrailer } = night;
+  const { movie } = night;
   return (
     <section className="ps ps--buzzer">
       <Confetti count={40} />
       <div className="buzzer-btn">
         <Icon name="star" />
       </div>
-      <p className="eyebrow">
-        {D.people.length} of {D.people.length} said yes
-      </p>
+      <p className="eyebrow">Everyone's in</p>
       <h1 className="buzzer-title gold-text">Golden Buzzer</h1>
       <p className="buzzer-note">
         It's <b>{movie.title}</b> tonight. Grab the popcorn.
       </p>
       <div className="ps-foot">
-        <button className="btn btn-gold" onClick={() => dispatch({ type: 'showMovie' })}>
-          <Icon name="play" /> Start the movie
-        </button>
-        <button className="btn btn-ghost" onClick={nextTrailer}>
-          Keep browsing
-        </button>
+        <p className="fineprint">Look up: tonight's picks are coming to the big screen.</p>
+      </div>
+    </section>
+  );
+}
+
+function PhonePicks({ night }) {
+  const top = night.picks.slice(0, 3);
+  return (
+    <section className="ps ps--picks">
+      <p className="eyebrow">Tonight's picks</p>
+      <h1 className="ps-title">Your group's top 3</h1>
+      <ol className="mini-picks">
+        {top.map((p, i) => (
+          <li key={p.movie.id}>
+            <span className="mini-rank">{i + 1}</span>
+            <Poster movie={p.movie} className="poster--thumb" />
+            <span className="mini-text">
+              <b>{p.movie.title}</b>
+              <PickStatus pick={p} />
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="eyebrow ps-label">5 more for your group</p>
+      <ol className="mini-recs">
+        {D.predicted.map((m) => (
+          <li key={m.id}>
+            <span>{m.title}</span>
+            <b>{m.match}%</b>
+          </li>
+        ))}
+      </ol>
+      <div className="ps-foot">
+        <WaitingNote>The big screen starts the movie</WaitingNote>
       </div>
     </section>
   );
@@ -402,21 +442,24 @@ function PhoneShowing({ night }) {
         🍿
       </div>
       <h1 className="ps-title">Phone down, eyes up.</h1>
-      <p className="ps-sub">Enjoy {night.movie.title}. Your group's taste gets sharper every movie night.</p>
+      <p className="ps-sub">
+        Enjoy {night.s.nowShowing.title}. Tandem keeps learning your group's taste every movie night.
+      </p>
     </section>
   );
 }
 
 const PHONE_SCREENS = {
   scan: PhoneScan,
+  mood: PhoneMood,
   connect: PhoneConnect,
   analyzing: PhoneAnalyzing,
-  vibe: PhoneVibe,
   lobby: PhoneLobby,
   react: PhoneReact,
   vote: PhoneVote,
   waiting: PhoneWaiting,
   miss: PhoneMiss,
   buzzer: PhoneBuzzer,
+  picks: PhonePicks,
   showing: PhoneShowing,
 };

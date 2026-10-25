@@ -27,14 +27,17 @@ function stageHint({ s, unanimous }) {
   if (s.phase === 'lobby') {
     if (s.phoneStep === 'scan') return 'Click the QR code on the big screen (or "Scan" on the phone) to join.';
     if (s.phoneStep !== 'seated') return 'Finish joining on the phone. Your friends are scanning in on their own.';
-    return 'Start the show from the phone or the big screen.';
+    return 'Phones just wait from here. Start the show from the big screen.';
   }
-  if (s.phase === 'trailer') return 'Tap emotes on the phone and watch them float up on the big screen.';
-  if (s.phase === 'voting') return 'Vote on the phone. It only counts if everyone says yes.';
-  if (s.phase === 'reveal') return 'Revealing the votes…';
+  if (s.phase === 'trailer') return 'Tap emotes on the phone. The big screen can skip to the vote.';
+  if (s.phase === 'voting') return 'Vote on the phone. Votes stay private: screens only show who has voted.';
+  if (s.phase === 'reveal') return 'Drumroll…';
   if (s.phase === 'result') {
-    return unanimous ? 'Golden buzzer. Start the movie, or keep browsing.' : 'Someone passed, so the next trailer loads on its own.';
+    return unanimous
+      ? "Golden buzzer. See tonight's picks from the big screen."
+      : "Not unanimous, and nobody sees who passed. The completion bar moves up and the next trailer loads.";
   }
+  if (s.phase === 'picks') return 'Top 3 from tonight plus 5 predicted picks. Start #1 from the big screen.';
   return 'Restart to run the demo again.';
 }
 
@@ -61,13 +64,6 @@ function App() {
               </button>
             ))}
           </div>
-          <button
-            className="tool-btn"
-            disabled={night.s.phase !== 'trailer'}
-            onClick={() => night.dispatch({ type: 'endTrailer' })}
-          >
-            <Icon name="skip" /> Skip trailer
-          </button>
           <button className="tool-btn" onClick={() => night.dispatch({ type: 'restart' })}>
             <Icon name="restart" /> Restart
           </button>

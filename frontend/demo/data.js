@@ -3,13 +3,24 @@
 window.TANDEM = {
   room: { code: 'K7Q2', name: 'Friday movie night' },
 
+  // What each person can say they want to feel tonight.
+  moods: [
+    { id: 'laugh', emoji: '😂', label: 'Laugh until it hurts', short: 'Laugh' },
+    { id: 'thrill', emoji: '😱', label: 'Be on the edge of my seat', short: 'On edge' },
+    { id: 'cry', emoji: '🥹', label: 'Feel all the feels', short: 'Feels' },
+    { id: 'mindblown', emoji: '🤯', label: 'Have my mind blown', short: 'Mind-blown' },
+    { id: 'cozy', emoji: '🥰', label: 'Something cozy', short: 'Cozy' },
+    { id: 'hyped', emoji: '🔥', label: 'Get hyped', short: 'Hyped' },
+  ],
+
   // The friend group, in seat order. `joinAt` is when (ms after the demo
-  // starts) each friend scans in. "you" is whoever holds the demo phone.
+  // starts) each friend scans in. "you" is whoever holds the demo phone and
+  // picks a mood on it.
   people: [
-    { id: 'maya', name: 'Maya', color: '#ff8a5b', vibe: 'Chaos Comedian', joinAt: 1600 },
-    { id: 'jordan', name: 'Jordan', color: '#6fa8ff', vibe: 'Popcorn Purist', joinAt: 3400 },
-    { id: 'sam', name: 'Sam', color: '#c39bff', vibe: 'Soft-Hearted Cynic', joinAt: 5200 },
-    { id: 'you', name: 'You', color: '#41d6a0', vibe: 'Plot-Twist Chaser' },
+    { id: 'maya', name: 'Maya', color: '#ff8a5b', mood: 'laugh', joinAt: 1600 },
+    { id: 'jordan', name: 'Jordan', color: '#6fa8ff', mood: 'hyped', joinAt: 3400 },
+    { id: 'sam', name: 'Sam', color: '#c39bff', mood: 'mindblown', joinAt: 5200 },
+    { id: 'you', name: 'You', color: '#41d6a0' },
   ],
 
   // What the phone "finds" while it reads your Instagram.
@@ -20,12 +31,6 @@ window.TANDEM = {
       'You finish film-theory videos',
       'Lots of dark comedy in your feed',
     ],
-    vibe: {
-      title: 'The Plot-Twist Chaser',
-      blurb: 'You save reveal edits and argue theories in the comments. Bring on the rug-pulls.',
-      traits: [['Twists', 92], ['Laughs', 71], ['Spectacle', 54], ['Feels', 38]],
-      tags: ['Whodunits', 'Dark comedy', 'Mind-benders'],
-    },
   },
 
   emotes: [
@@ -37,8 +42,9 @@ window.TANDEM = {
     { emoji: '🥱', label: 'Snooze' },
   ],
 
-  // Trailer queue. `votes` scripts how the friends vote: the first trailer
-  // misses (Sam passes) and the second hits the golden buzzer if you say yes.
+  // Trailer queue. `match` is the model's predicted chance everyone says yes.
+  // `votes` scripts how the friends vote: the first trailer misses (Sam
+  // passes) and the second hits the golden buzzer if you say yes.
   // `palette` + `motif` drive the placeholder poster and trailer art.
   movies: [
     {
@@ -51,6 +57,7 @@ window.TANDEM = {
       match: 88,
       palette: ['#24170f', '#9a6a33', '#e8c88f'],
       motif: 'rays',
+      moods: ['mindblown', 'laugh'],
       why: [
         { who: 'maya', text: 'saves whodunit edits' },
         { who: 'you', text: 'liked 9 plot-twist reels' },
@@ -68,6 +75,7 @@ window.TANDEM = {
       match: 96,
       palette: ['#1b0f3a', '#ff4fa3', '#ffd166'],
       motif: 'eye',
+      moods: ['laugh', 'mindblown', 'hyped', 'cry'],
       why: [
         { who: 'jordan', text: 'replays kung-fu fight reels' },
         { who: 'sam', text: 'shares absurdist memes' },
@@ -85,6 +93,7 @@ window.TANDEM = {
       match: 91,
       palette: ['#0b1026', '#ff2e4d', '#28c7fa'],
       motif: 'halftone',
+      moods: ['hyped', 'mindblown'],
       why: [
         { who: 'jordan', text: 'follows 4 animation artists' },
         { who: 'maya', text: 'watches every sneaker drop' },
@@ -102,6 +111,7 @@ window.TANDEM = {
       match: 79,
       palette: ['#0f2233', '#e98a6b', '#f6d6b8'],
       motif: 'horizon',
+      moods: ['cry', 'cozy'],
       why: [
         { who: 'sam', text: 'saves rainy-day film stills' },
         { who: 'you', text: 'lingers on travel reels' },
@@ -109,5 +119,14 @@ window.TANDEM = {
       vibes: ['😍', '🥱', '😍'],
       votes: { maya: 'yes', jordan: 'no', sam: 'yes' },
     },
+  ],
+
+  // The 5 extra recommendations shown at the end, ranked by predicted match.
+  predicted: [
+    { id: 'parasite', title: 'Parasite', year: 2019, genres: ['Thriller', 'Dark comedy'], match: 87, palette: ['#14201a', '#6f8f5a', '#e9e2c8'], motif: 'horizon' },
+    { id: 'paddington-2', title: 'Paddington 2', year: 2017, genres: ['Comedy', 'Family'], match: 84, palette: ['#2a1410', '#c8452c', '#f2c14e'], motif: 'rays' },
+    { id: 'arrival', title: 'Arrival', year: 2016, genres: ['Sci-fi', 'Drama'], match: 81, palette: ['#0e1418', '#5d7480', '#d9dfe0'], motif: 'eye' },
+    { id: 'oceans-eleven', title: "Ocean's Eleven", year: 2001, genres: ['Heist', 'Comedy'], match: 79, palette: ['#0d1a2b', '#c99a3b', '#f4e3b5'], motif: 'halftone' },
+    { id: 'grand-budapest', title: 'The Grand Budapest Hotel', year: 2014, genres: ['Comedy', 'Adventure'], match: 76, palette: ['#3a1428', '#e8879e', '#f6d3c4'], motif: 'rays' },
   ],
 };
