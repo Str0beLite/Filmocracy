@@ -12,5 +12,6 @@ supabase/.temp/
 .env.*
 !.env.example
 !.env.test.example
+!frontend/.env.production
 .DS_Store
 *.log
