@@ -24,3 +24,20 @@ export function token(): string {
   store.setItem(key, value);
   return value;
 }
+
+// Log out: this phone gets a fresh id next time. There's no password, so the old account is gone from here.
+export function forget(removeProfile = false) {
+  if (removeProfile) {
+    const credential = token();
+    try {
+      const profiles = JSON.parse(localStorage.getItem('tandem.phone.profiles') ?? '[]');
+      if (Array.isArray(profiles)) localStorage.setItem('tandem.phone.profiles', JSON.stringify(profiles.filter((p) => p?.credential !== credential)));
+    } catch { /* Leave malformed saved profile data for settings to handle. */ }
+  }
+  localStorage.removeItem('tandem.phone.active-profile');
+  sessionStorage.removeItem('tandem.phone.session');
+  for (const key of ['tandem.guest.token', 'tandem.device-user.phone']) localStorage.removeItem(key);
+  for (const key of ['tandem.guest.token', 'tandem.device-user.phone', 'tandem-me', 'tandem-votes', 'tandem.phone.invite']) {
+    sessionStorage.removeItem(key);
+  }
+}

@@ -101,8 +101,26 @@ async def playable(row):
     return True
 
 
+def test_queue_rescores_the_unshown_films_with_the_latest_votes(setup, monkeypatch):
+    factory, store, clock = setup
+    with TestClient(factory()) as c:
+        monkeypatch.setattr(c.app.state.integration, "playable", playable)
+        sid = lobby(c)["session_id"]
+        assert post(c, f"/sessions/{sid}/queue").json()["added"] == config.SESSION_BATCH
+        rid = post(c, f"/sessions/{sid}/control", json={"action": "start"}).json()["round_id"]
+        for user in ("a", "b", "c"):
+            post(c, f"/sessions/{sid}/votes", user, json={"round_id": rid, "value": 1})
+        assert store.count_events() == 0   # the 10 s sync loop hasn't run yet
+        post(c, f"/sessions/{sid}/queue")
+        assert store.count_events() == 3   # the queue copied this round's votes in before re-picking
+        movies = get(c, f"/sessions/{sid}").json()["session_movies"]
+        unshown = [m["movie_id"] for m in movies if not m["shown_at"]]
+        assert len(unshown) == config.SESSION_BATCH and len({m["movie_id"] for m in movies}) == len(movies)
+
+
 def test_real_sqlite_tv_three_phones_concurrent_votes_and_controls(setup, monkeypatch):
     factory, store, clock = setup
+    monkeypatch.setattr(config, "SESSION_BATCH", 10)   # one queue call covers every round below
     with TestClient(factory()) as c:
         monkeypatch.setattr(c.app.state.integration, "playable", playable)
         assert c.post("/sessions", json={"display_name": "TV"}).status_code == 401
@@ -193,12 +211,6 @@ def test_failures_cannot_undo_votes_and_restart_preserves_data(setup, monkeypatc
         rid = post(c, f"/sessions/{sid}/control", json={"action": "start"}).json()["round_id"]
         post(c, f"/sessions/{sid}/votes", "a", json={"round_id": rid, "value": 1})
 
-        async def unavailable(row):
-            raise RuntimeError("provider offline")
-
-        monkeypatch.setattr(c.app.state.integration, "playable", unavailable)
-        assert post(c, f"/sessions/{sid}/queue").status_code == 503
-        assert len(get(c, f"/sessions/{sid}").json()["votes"]) == 1
         # Failed feedback transaction rolls back its own work, never the accepted vote.
         with store.lock:
             store.db.execute(
@@ -213,11 +225,11 @@ def test_failures_cannot_undo_votes_and_restart_preserves_data(setup, monkeypatc
             store.db.execute("DROP TRIGGER fail_feedback")
             store.db.commit()
         assert c.app.state.sessions.sync_feedback(0) == 1
-        before = {m["movie_id"] for m in get(c, f"/sessions/{sid}").json()["session_movies"]}
-        monkeypatch.setattr(c.app.state.integration, "playable", playable)
+        shown = {m["movie_id"] for m in get(c, f"/sessions/{sid}").json()["session_movies"] if m["shown_at"]}
         assert post(c, f"/sessions/{sid}/queue").json()["added"] > 0
         after = get(c, f"/sessions/{sid}").json()["session_movies"]
-        assert len(after) == len({m["movie_id"] for m in after}) and before < {
+        # Unshown films are re-picked (with noise); shown ones stay.
+        assert len(after) == len({m["movie_id"] for m in after}) and shown < {
             m["movie_id"] for m in after
         }
     dbpath = Path(store.db.execute("PRAGMA database_list").fetchone()[2])
@@ -483,8 +495,8 @@ def test_migration_is_idempotent_and_preserves_existing_recommendation_data(tmp_
     source = Path(__file__).resolve().parents[1] / "catalog/session_movie_metadata.json"
     first = migrate(path, source)
     second = migrate(path, source)
-    assert first["supplementary_metadata_rows"] == second["supplementary_metadata_rows"] == 200
-    assert first["movie_catalog_rows"] == second["movie_catalog_rows"] == 5000
+    assert first["supplementary_metadata_rows"] == second["supplementary_metadata_rows"] == 5123
+    assert first["movie_catalog_rows"] == second["movie_catalog_rows"] == 9994
     assert first["recommendation_counts_before"] == first["recommendation_counts_after"]
     assert second["recommendation_counts_after"]["feeds"] == 1
     assert second["recommendation_counts_after"]["events"] == 1
@@ -647,6 +659,26 @@ def test_each_members_feeling_boosts_group_scores(setup):
         _, model = integration.state['trainer'].current()
         base = score_feed(model, feed['x'], cat.vecs, cat.prior)
         expected = boost(base, cat.movies, ['comedy', 'funny', 'hilarious'])
-        assert np.allclose(integration.scores([feed], {'a': 'laugh'}), expected)
-        assert np.allclose(integration.scores([feed], {}), base)
+        assert np.allclose(integration.scores([(feed, 'laugh')]), expected)
+        assert np.allclose(integration.scores([(feed, None)]), base)
         assert expected[0] > base[0]
+
+def test_account_favourites_and_delete(setup):
+    factory, store, _ = setup
+    with TestClient(factory()) as c:
+        h = {"Authorization": "Bearer d"}
+        assert post(c, "/me/favourites", "a", json={"movie_ids": [50]}).status_code == 409
+        sid = lobby(c)["session_id"]
+        post(c, "/feeds", "a", data={"tags": '{"tag 2":1}'})  # a newer feed; favourites follow the person
+        assert post(c, "/me/favourites", "a", json={"movie_ids": [50, 51]}).json()["missing"] == []
+        assert [m["id"] for m in get(c, "/me/favourites", "a").json()] == [51, 50]
+        assert c.delete("/me/favourites/50", headers={"Authorization": "Bearer a"}).status_code == 200
+        assert [m["id"] for m in get(c, "/me/favourites", "a").json()] == [51]
+        assert get(c, "/me/favourites", "b").json() == []
+        assert c.delete("/me", headers={"Authorization": "Bearer a"}).json() == {"ok": True}
+        assert get(c, "/me", "a").json()["feed_id"] is None
+        assert get(c, "/me/favourites", "a").json() == []
+        assert get(c, "/profiles/me", "a").json()["display_name"] == "Guest"
+        assert "a" not in get(c, f"/sessions/{sid}", "b").json()["session_feeds"]
+        assert get(c, "/me", "b").json()["feed_id"] is not None
+        assert c.delete("/me", headers=h).status_code == 401

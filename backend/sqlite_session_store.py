@@ -419,6 +419,25 @@ class SessionStore:
             )
         return {"id": user, "display_name": name}
 
+    def delete_account(self, user):
+        """Drop a person's feeds, votes-as-training and name. Past nights keep an anonymous seat."""
+        with self.transaction() as db:
+            feeds = "SELECT id FROM feeds WHERE user=?"
+            db.execute(f"DELETE FROM events WHERE feed_id IN ({feeds})", (user,))
+            db.execute(f"DELETE FROM recs WHERE feed_id IN ({feeds})", (user,))
+            db.execute("DELETE FROM feeds WHERE user=?", (user,))
+            db.execute("DELETE FROM session_feeds WHERE user_id=?", (user,))
+            if db.execute(
+                "SELECT 1 FROM tandem_members WHERE user_id=? UNION SELECT 1 FROM tandem_sessions"
+                " WHERE host_user_id=?",
+                (user, user),
+            ).fetchone():
+                # Session rows reference the profile, so it stays, nameless.
+                db.execute("UPDATE tandem_profiles SET display_name='Guest' WHERE id=?", (user,))
+            else:
+                db.execute("DELETE FROM tandem_profiles WHERE id=?", (user,))
+        return {"ok": True}
+
     def bind(self, sid, user, fid):
         with self.transaction() as db:
             self.member(db, sid, user)
@@ -438,20 +457,24 @@ class SessionStore:
             session = self.member(db, sid, user, host=True)
             if session["status"] == "ended":
                 raise HTTPException(409, "Session has ended")
-            feeds = [
-                r[0]
+            feeds = [  # (feed_id, feeling or None) per connected voter
+                (r[0], r[1])
                 for r in db.execute(
-                    "SELECT f.feed_id FROM session_feeds f JOIN tandem_members m "
-                    "ON m.session_id=f.session_id AND m.user_id=f.user_id WHERE f.session_id=? "
-                    "AND m.is_voter=1 AND m.left_at IS NULL AND m.last_seen_at>?",
+                    "SELECT f.feed_id, s.feeling FROM session_feeds f JOIN tandem_members m "
+                    "ON m.session_id=f.session_id AND m.user_id=f.user_id "
+                    "LEFT JOIN tandem_member_state s ON s.session_id=f.session_id AND s.user_id=f.user_id "
+                    "WHERE f.session_id=? AND m.is_voter=1 AND m.left_at IS NULL AND m.last_seen_at>?",
                     (sid, self.stamp(-45)),
                 )
             ]
-            queued = {
+            shown = {  # unshown films are re-picked on every queue call
                 r[0]
-                for r in db.execute("SELECT movie_id FROM tandem_queue WHERE session_id=?", (sid,))
+                for r in db.execute(
+                    "SELECT movie_id FROM tandem_queue WHERE session_id=? AND shown_at IS NOT NULL",
+                    (sid,),
+                )
             }
-        return feeds, queued
+        return feeds, shown
 
     def movies(self, offset=0, limit=100):
         with self.transaction(write=False) as db:
@@ -491,6 +514,8 @@ class SessionStore:
             session = self.member(db, sid, user, host=True)
             if session["status"] == "ended":
                 raise HTTPException(409, "Session has ended")
+            # Replace what hasn't been shown yet, so the latest votes decide what comes next.
+            db.execute("DELETE FROM tandem_queue WHERE session_id=? AND shown_at IS NULL", (sid,))
             pos = db.execute(
                 "SELECT COALESCE(MAX(position),0) FROM tandem_queue WHERE session_id=?", (sid,)
             ).fetchone()[0]

@@ -132,6 +132,10 @@ A user's taste embedding is the `x` of the feed they uploaded most recently. It 
 |---|---|---|
 | `GET` | `/health` | Current W version, number of films, event count, whether the vision key is set |
 | `GET` | `/me` | `{user, feed_id, tags}` for your latest feed, or `feed_id: null`, meaning send them to onboarding |
+| `DELETE` | `/me` | Delete your account: feeds, favourites, votes as training data, and your name |
+| `GET` | `/me/favourites` | Your favourite films, newest first, across all your feeds |
+| `POST` | `/me/favourites` | `{movie_ids}` or `{titles}`: save favourites on your latest feed (409 without a feed) |
+| `DELETE` | `/me/favourites/{movie_id}` | Remove a favourite |
 | `POST` | `/feeds` | Onboarding. Multipart: `files` (feed screenshots) and/or `tags` (JSON `{tag: weight}`). Becomes your current embedding. Returns `feed_id` and the tags it read |
 | `POST` | `/groups` | Host creates a session: `{"user_ids": [...]}` (may be empty). The caller is the host, not a member. Returns `{group_id, host, members}`. **409** `{"detail": {"needs_onboarding": [ids]}}` if someone has no feed yet |
 | `POST` | `/groups/{gid}/join` | The signed-in phone joins (QR code flow); the group's average embedding is recomputed. 409 if you have no feed yet |

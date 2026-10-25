@@ -30,9 +30,9 @@ class Catalog:
         return cls(json.loads((path / "movies.json").read_text()), np.load(path / "movie_vecs.npy"))
 
     def feed_vector(self, weights: dict):
-        """Any {tag: weight} from Muse Spark -> x. Not centred: subtracting the film centre would make an
-        unrelated feed point away from "generic film" and pull up oddballs for no reason."""
-        return bag(weights)
+        """Any {tag: weight} from Muse Spark -> x, centred like the films. Uncentred feeds were ~95% the same
+        generic direction (any two feeds had cosine 0.95), so everyone got the same mainstream picks."""
+        return unit(bag(weights) - self.center).astype(np.float32)
 
     def search(self, q, limit=10):
         q = q.casefold().strip()

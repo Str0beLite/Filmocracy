@@ -81,3 +81,18 @@ test('a closed round shows its verdict immediately and advances after two second
     assert.equal(snapshots.at(-1).movieId, 2);
   } finally { Date.now = originalNow; globalThis.setInterval = originalInterval; }
 });
+
+test('logout clears the active identity and deletion removes only that saved profile', async () => {
+  globalThis.localStorage = storage(); globalThis.sessionStorage = storage();
+  globalThis.location = { pathname: '/phone/account' };
+  const { forget, token } = await import(await browserModule('src/api/auth.ts'));
+  const first = `guest-${'a'.repeat(64)}`, second = `guest-${'b'.repeat(64)}`;
+  localStorage.setItem('tandem.phone.profiles', JSON.stringify([{name:'Alex', credential:first}, {name:'Sam',credential:second}]));
+  localStorage.setItem('tandem.phone.active-profile', first);
+  forget();
+  assert.notEqual(token(), first);
+  assert.equal(JSON.parse(localStorage.getItem('tandem.phone.profiles')).length, 2);
+  localStorage.setItem('tandem.phone.active-profile', first);
+  forget(true);
+  assert.deepEqual(JSON.parse(localStorage.getItem('tandem.phone.profiles')).map((p) => p.name), ['Sam']);
+});

@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 import numpy as np
 from fastapi import HTTPException
 from import_tmdb import movie_row
+from tandem import config
 from tandem.recommend import boost, pick, score_feed
 
 log = logging.getLogger(__name__)
@@ -179,34 +180,45 @@ class SessionRecommendations:
         rows[movie["id"]] = row
         return row
 
-    def scores(self, feeds, feelings):
+    def sync_votes(self):
+        """Copy new session votes into the feedback log (and wake the trainer for each)."""
+        version, _ = self.state["trainer"].current()
+        synced = self.sessions.sync_feedback(version)
+        for _ in range(synced):
+            self.state["trainer"].notify_event()
+        return synced
+
+    def scores(self, feeds):
+        """feeds: [(feed, feeling)]. Each voter's taste is pulled toward their yes votes and away from their no
+        votes, then gets their own mood boost before averaging: a film that fits half the room's mood gets half."""
         _, model = self.state["trainer"].current()
         cat = self.state["catalog"]
-        return self.aggregate([
-            boost(
-                score_feed(model, f["x"], cat.vecs, cat.prior, *self.store.votes(f["id"])),
-                cat.movies,
-                FEELING_BOOST.get(feelings.get(f["user"]), []),
-            )
-            for f in feeds
-        ])
+        return self.aggregate(
+            [
+                boost(
+                    score_feed(model, f["x"], cat.vecs, cat.prior, *self.store.votes(f["id"])),
+                    cat.movies,
+                    FEELING_BOOST.get(feeling, []),
+                )
+                for f, feeling in feeds
+            ]
+        )
 
     async def queue(self, sid, user):
         async with self.lock:
             try:
-                feed_ids, queued = await asyncio.to_thread(self.sessions.context, sid, user)
-                feeds = [self.store.get_feed(fid) for fid in feed_ids]
-                feeds = [feed for feed in feeds if feed]
+                seated, shown = await asyncio.to_thread(self.sessions.context, sid, user)
+                feeds = [(self.store.get_feed(fid), feeling) for fid, feeling in seated]
+                feeds = [(feed, feeling) for feed, feeling in feeds if feed]
                 if not feeds:
                     raise HTTPException(409, "At least one connected voter needs a feed")
                 cat = self.state["catalog"]
-                snapshot = await asyncio.to_thread(self.sessions.snapshot, sid, user)
-                feelings = {row["user_id"]: row["feeling"] for row in snapshot["member_state"]}
-                scores = await asyncio.to_thread(self.scores, feeds, feelings)
+                await asyncio.to_thread(self.sync_votes)
+                scores = await asyncio.to_thread(self.scores, feeds)
                 if not np.isfinite(scores).all():
                     raise ValueError("Non-finite recommendation scores")
                 rows = {row["id"]: row for row in await asyncio.to_thread(self.sessions.metadata)}
-                excluded = {cat.id_to_idx[mid] for mid in queued}
+                excluded = {cat.id_to_idx[mid] for mid in shown if mid in cat.id_to_idx}
                 sampled = [item["idx"] for item in pick(scores, exclude=excluded)]
                 order = sampled + [int(i) for i in np.argsort(-scores) if i not in excluded and i not in sampled]
                 eligible = {}
@@ -214,7 +226,7 @@ class SessionRecommendations:
                     row = await self.resolve_trailer(cat.movies[idx], rows)
                     if row and await self.playable(row):
                         eligible[idx] = row["id"]
-                        if len(eligible) == 10:
+                        if len(eligible) == config.SESSION_BATCH:
                             break
                 if not eligible:
                     raise HTTPException(409, "No unshown, verified playable catalog matches available")
@@ -257,7 +269,9 @@ class SessionRecommendations:
             if not np.isfinite(scores).all():
                 raise HTTPException(503, "Recommendations unavailable; try again")
             rows = {r["id"]: r for r in await asyncio.to_thread(self.sessions.metadata)}
-            for idx in np.argsort(-scores):
+            sampled = [item["idx"] for item in pick(scores, exclude=excluded)]
+            order = sampled + [int(i) for i in np.argsort(-scores) if i not in excluded and i not in sampled]
+            for idx in order:
                 idx = int(idx)
                 if idx in excluded:
                     continue

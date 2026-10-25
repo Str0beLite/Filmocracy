@@ -20,8 +20,8 @@ function Follow({ children }: { children: ReactNode }) {
   const person = s.people.find((p) => p.id === me);
   // Before you have a name, only the first two steps are open.
   const allowed = person ? ONBOARDING : ONBOARDING.slice(0, 2);
-  const independent = pathname === '/phone/settings' || pathname === '/phone/join' || pathname === '/phone/name' || pathname === '/phone/feeling';
-  const want = independent ? pathname : person?.seated ? phonePath(s, person.id) : person && !person.feeling ? '/phone/feeling' : allowed.includes(pathname) ? pathname : '/phone/join';
+  const independent = pathname === '/phone/account' || pathname === '/phone/settings' || pathname === '/phone/join' || pathname === '/phone/name' || pathname === '/phone/feeling';
+  const want = independent ? pathname : s.ended ? '/phone/ended' : person?.seated ? phonePath(s, person.id) : person && !person.feeling ? '/phone/feeling' : allowed.includes(pathname) ? pathname : '/phone/join';
 
   // The room was reset (or the server restarted): start this phone over.
   useEffect(() => {

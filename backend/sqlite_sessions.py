@@ -199,6 +199,11 @@ def update_profile(body: CreateSession, request: Request, user=Depends(current_u
     return request.app.state.sessions.update_profile(user, body.display_name)
 
 
+@router.delete("/me")
+def delete_account(request: Request, user=Depends(current_user)):
+    return request.app.state.sessions.delete_account(user)
+
+
 @router.post("/sessions", response_model=SessionCreated)
 def create(body: CreateSession, request: Request, user=Depends(current_user)):
     return request.app.state.sessions.create(user, body.display_name)
@@ -284,6 +289,7 @@ def movies(
 
 @router.get("/session-catalog")
 def catalog(request: Request, user=Depends(current_user)):
+    """Every film the queue can pick: catalog id, tmdb_id, title, year, tags, plus stored metadata where we have it."""
     cat = request.app.state.tandem["catalog"]
     rows = {row["id"]: row for row in request.app.state.sessions.metadata()}
     return [

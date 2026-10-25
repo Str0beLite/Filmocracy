@@ -97,6 +97,7 @@ export function PhoneSettings() {
       <p className="ps-sub">{feed ? 'Your taste is saved. Refresh it whenever your Explore page changes.' : 'Add 1–3 Explore screenshots to find films that feel like you.'}</p>
       <button className="btn btn-ghost" disabled={loading || busy} onClick={() => { setEditing(true); setError(''); setNotice(''); }}>{feed ? 'Replace screenshots' : 'Add screenshots'}</button>
     </section>
+    <Link className="btn btn-ghost account-gap" to="/phone/account">Favourite films and account <ArrowRight aria-hidden="true" /></Link>
     <section className="settings-section" aria-labelledby="settings-profiles">
       <h2 id="settings-profiles" className="display">Profiles on this phone</h2>
       <p className="fineprint settings-local">Saved on this browser. Each profile keeps its own taste and votes.</p>

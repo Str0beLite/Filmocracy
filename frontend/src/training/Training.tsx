@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { ApiError, http } from '../api/http';
+import { useTrailer } from '../api/tmdb';
 import { FEELINGS } from '../api/data';
 import type { FeelingId } from '../api';
 import { Wordmark } from '../components/ui';
@@ -13,7 +14,7 @@ interface Recommendation {
   rec_id: number;
   score?: number;
   w_version: number;
-  movie: { id: number; title: string; year?: number; overview?: string; trailer_key: string };
+  movie: { id: number; tmdb_id: number | null; title: string; year?: number; overview?: string; trailer_key: string | null };
 }
 
 // Onboarding uses the app's own screens; only the header and the trailer/vote loop are training's.
@@ -37,6 +38,8 @@ export function Training() {
   const [readError, setReadError] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [rec, setRec] = useState<Recommendation | null>(null);
+  // Films without a stored trailer get theirs from TMDB live, by tmdb_id.
+  const trailer = useTrailer(rec?.movie.tmdb_id ?? null, rec?.movie.trailer_key ?? null);
   const [votes, setVotes] = useState(0);
   const [saved, setSaved] = useState(false);
   const [seen, setSeen] = useState<boolean | null>(null);
@@ -185,17 +188,17 @@ export function Training() {
         {step === 'watch' && <div className="training-watch">
           <div className="training-player">
             {rec ? <>
-              <iframe
+              {trailer ? <iframe
                 key={rec.rec_id}
                 className="training-trailer"
                 title={`${rec.movie.title} trailer`}
-                src={`https://www.youtube-nocookie.com/embed/${rec.movie.trailer_key}?rel=0&playsinline=1`}
+                src={`https://www.youtube-nocookie.com/embed/${trailer}?rel=0&playsinline=1`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
-              />
+              /> : <div className="training-trailer" role="status">Finding the trailer…</div>}
               <p className="training-note">{rec.movie.year ? `${rec.movie.year} · ` : ''}Watch the trailer, then vote below.</p>
-              <a className="training-youtube" href={`https://www.youtube.com/watch?v=${rec.movie.trailer_key}`} target="_blank" rel="noreferrer">Trailer won’t play? Open on YouTube</a>
+              <a className="training-youtube" href={trailer ? `https://www.youtube.com/watch?v=${trailer}` : `https://www.youtube.com/results?search_query=${encodeURIComponent(`${rec.movie.title} ${rec.movie.year ?? ''} trailer`)}`} target="_blank" rel="noreferrer">{trailer ? 'Trailer won’t play? Open on YouTube' : 'No trailer here? Search YouTube'}</a>
             </> : <p className="ps-sub">Your taste profile is saved. Find a trailer when you’re ready.</p>}
           </div>
           <section className="training-ballot" aria-labelledby="training-vote-title">

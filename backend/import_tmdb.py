@@ -33,7 +33,7 @@ def request(client, method, path, *, sleep=time.sleep, **kwargs):
     raise RuntimeError("Retry budget exhausted")
 
 
-def movie_row(details, image_base):
+def movie_row(details, image_base, require_trailer=True):
     if details.get("adult") or not str(details.get("title", "")).strip():
         return None
     trailers = [
@@ -43,12 +43,12 @@ def movie_row(details, image_base):
         and video.get("site") in ("YouTube", "Vimeo")
         and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", str(video.get("key", "")))
     ]
-    if not trailers:
+    if not trailers and require_trailer:
         return None
     trailers.sort(key=lambda v: (not v.get("official", False), v.get("iso_639_1") != "en"))
-    trailer = trailers[0]
+    trailer = trailers[0] if trailers else None
     prefix = (
-        "https://www.youtube.com/watch?v=" if trailer["site"] == "YouTube" else "https://vimeo.com/"
+        "https://www.youtube.com/watch?v=" if trailer and trailer["site"] == "YouTube" else "https://vimeo.com/"
     )
     try:
         release_date = date.fromisoformat(details.get("release_date", "")).isoformat()
@@ -65,8 +65,8 @@ def movie_row(details, image_base):
         "release_date": release_date,
         "runtime_minutes": runtime if isinstance(runtime, int) and runtime > 0 else None,
         "genres": [g["name"] for g in details.get("genres", []) if g.get("name")],
-        "trailer_url": prefix + trailer["key"],
-        "trailer_provider": trailer["site"].lower(),
+        "trailer_url": prefix + trailer["key"] if trailer else None,
+        "trailer_provider": trailer["site"].lower() if trailer else None,
     }
 
 

@@ -5,6 +5,7 @@ import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import qrcode from 'qrcode-generator';
 import { Lock, Shuffle, Star } from 'lucide-react';
 import { act, type Movie, type Person, type Pick } from '../api';
+import { usePoster } from '../api/tmdb';
 import { FEELING_ICONS, feelingOf } from '../lib/feelings';
 
 // A button that sends one room action and stays disabled while it's in flight.
@@ -153,7 +154,8 @@ export function CompletionStatus({ value, className = '' }: { value: number; cla
 export function Poster({ movie, className = '' }: { movie: Movie; className?: string }) {
   const [c1, c2, c3] = movie.palette;
   const [failed, setFailed] = useState<string | null>(null);
-  const src = movie.posterUrl && failed !== movie.posterUrl ? movie.posterUrl : null;
+  const poster = usePoster(movie.tmdbId, movie.posterUrl); // films without stored details: TMDB, live
+  const src = poster && failed !== poster ? poster : null;
   return (
     <div
       className={`poster poster--${movie.motif} ${className}`}

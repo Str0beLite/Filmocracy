@@ -171,6 +171,7 @@ const status = (online: boolean) => listeners.forEach((l) => l.onStatus(online))
 const PREJOIN: Snapshot = {
   serverNow: 0,
   joined: false,
+  ended: false,
   invite: '',
   roundId: null,
   code: '',
@@ -216,6 +217,7 @@ function toSnapshot(st: BackendState, sg: Stage): Snapshot {
     ...PREJOIN,
     serverNow: Date.parse(st.server_now),
     joined: true,
+    ended: st.session.status === 'ended',
     invite,
     roundId: sg.roundId,
     code: st.session.id.slice(0, 4).toUpperCase(),
@@ -235,7 +237,31 @@ function toSnapshot(st: BackendState, sg: Stage): Snapshot {
   };
 }
 
+// Never show a film before its details are in: if the backend queued one this page hasn't loaded
+// (it was redeployed with a bigger catalog), fetch the catalog again, then show the newest state.
+let latest: BackendState | null = null;
+let refetching = false;
+const refetched = new Set<number>(); // ids we already refetched for, so an unknown id can't loop
 function onState(st: BackendState) {
+  latest = st;
+  if (refetching) return;
+  const missing = st.session_movies.map((m) => m.movie_id).filter((id) => !movies.has(id) && !refetched.has(id));
+  if (missing.length) {
+    missing.forEach((id) => refetched.add(id));
+    refetching = true;
+    catalog = null;
+    void loadCatalog()
+      .catch(() => {})
+      .finally(() => {
+        refetching = false;
+        onState(latest!);
+      });
+    return;
+  }
+  applyState(st);
+}
+
+function applyState(st: BackendState) {
   const fresh = state?.session.id !== st.session.id;
   state = st;
   offset = Date.parse(st.server_now) - Date.now();
@@ -324,8 +350,7 @@ async function startTv() {
 async function startPhone() {
   if (!sessionId || !token()) return emit(PREJOIN);
   try {
-    const saved = await http<BackendState>(`/sessions/${sessionId}`);
-    if (saved.session.status === 'ended') { setSession(null); return emit(PREJOIN); }
+    await http<BackendState>(`/sessions/${sessionId}`);
   } catch (err) {
     if (!(err instanceof ApiError) || ![403, 404].includes(err.status)) throw err;
     setSession(null);
@@ -443,7 +468,11 @@ if (device() === 'tv') setInterval(direct, 250);
 async function next() {
   if (busy) return;
   const open = openRound();
-  if (open) return publish(trailerFor(open));
+  if (open) {
+    // The backend opened this one when voting closed; re-pick the rest with the votes so far.
+    http(`/sessions/${sessionId}/queue`, {}).catch(() => {});
+    return publish(trailerFor(open));
+  }
   busy = true;
   try {
     const queued = state!.session_movies.some((m) => !m.shown_at);
@@ -601,6 +630,13 @@ async function run(action: string, body: Record<string, unknown>, sid: string | 
       return null;
     case 'newNight':
       return newNight();
+    case 'end': {
+      // Ends tonight for every phone, then opens a fresh lobby with a new QR code.
+      await http(`/sessions/${sid}/control`, { action: 'end' });
+      const made = await http<{ session_id: string; invite_token: string }>('/sessions', { display_name: 'TV' });
+      invite = made.invite_token;
+      return follow(made.session_id);
+    }
     case 'devAdvance':
       // Dev fast-forward: trailer -> vote -> close the round as it stands -> next.
       if (stage.phase === 'trailer') return run('endTrailer', {}, sid);

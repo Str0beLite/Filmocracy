@@ -8,6 +8,7 @@ import { gsap, useMotion } from '../lib/motion';
 import { tvPath } from '../lib/flow';
 import { useRoom } from '../room/useRoom';
 import { DevBar } from '../dev/DevBar';
+import { act } from '../api';
 
 export function TVFrame() {
   const { s } = useRoom();
@@ -33,6 +34,14 @@ export function TVFrame() {
     <main className="tv">
       <div className="tv-screen" ref={screen}>
         {pathname === want && <Outlet />}
+        {s.joined && (
+          <button
+            className="tv-btn tv-btn--ghost tv-btn--sm tv-end"
+            onClick={() => confirm('End movie night for everyone?') && act('end')}
+          >
+            End night
+          </button>
+        )}
         <div className={`curtains ${open ? 'is-open' : ''}`} aria-hidden="true">
           <div className="curtain curtain--left" />
           <div className="curtain curtain--right" />
