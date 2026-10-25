@@ -153,9 +153,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         ):
             f, cat = _feed(fid, user), state["catalog"]
             model = Translator(cat.w0).eval()  # A = 0, so W = W0 = I
-            counts = np.array([m.get("popularity", 0) for m in cat.movies])
-            pct = counts.argsort().argsort() / (len(counts) - 1)  # 0 = least rated film, 1 = most rated
-            s = score_feed(model, f["x"], cat.vecs) + pop * pct**2
+            s = score_feed(model, f["x"], cat.vecs) + pop * cat.prior
             return {
                 "w_version": "identity",
                 "pop": pop,

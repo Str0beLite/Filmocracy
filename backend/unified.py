@@ -48,6 +48,8 @@ def create_app(catalog=None, store=None, metadata=None, clock=None):
                 )
             if config.DEV_AUTH:
                 raise RuntimeError("TANDEM_DEV_AUTH must be disabled on Railway")
+            if config.FAKE_ENCODER:
+                raise RuntimeError("TANDEM_FAKE_ENCODER must be disabled on Railway")
         task = None
         try:
             async with rec.router.lifespan_context(rec):

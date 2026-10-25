@@ -1,3 +1,5 @@
+> **watchtandem.tech deployment:** See [the production guide](production-deployment.md) for Railway, Cloudflare Pages, custom domains, Google configuration and the frontend completion blocker.
+
 # Docs
 
 | File | Purpose |

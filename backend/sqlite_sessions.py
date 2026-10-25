@@ -1,7 +1,8 @@
-"""Google-authenticated session API and authorized SSE snapshots over SQLite."""
+"""Google-authenticated session API and WebSocket/SSE snapshots over SQLite."""
 
 import asyncio
 import json
+import os
 from typing import Literal, Optional
 from uuid import UUID
 
@@ -18,12 +19,74 @@ from api_models import (
     VoteRecord,
     VotingRound,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.websockets import WebSocketDisconnect
 from tandem.auth import current_user
 
 router = APIRouter()
+
+
+@router.websocket("/sessions/{sid}/ws")
+async def session_socket(sid: UUID, websocket: WebSocket):
+    # Browser sockets cannot send Authorization headers; keep credentials out of URLs.
+    origins = {
+        value.strip()
+        for value in os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",")
+    }
+    origin = websocket.headers.get("origin")
+    if origin and origin not in origins:
+        await websocket.close(code=1008)
+        return
+    await websocket.accept()
+    try:
+        message = await asyncio.wait_for(websocket.receive_json(), timeout=10)
+        token = message.get("token") if isinstance(message, dict) else None
+        if (
+            not isinstance(message, dict)
+            or message.get("type") != "auth"
+            or not isinstance(token, str)
+            or not token
+            or len(token) > 8192
+        ):
+            await websocket.close(code=4401)
+            return
+        try:
+            user = await asyncio.to_thread(current_user, authorization=f"Bearer {token}")
+        except HTTPException:
+            await websocket.close(code=4401)
+            return
+        sessions = websocket.app.state.sessions
+        revision = None
+        while True:
+            try:
+                state = await asyncio.to_thread(sessions.snapshot, str(sid), user)
+            except HTTPException:
+                await websocket.close(code=4403)
+                return
+            if state["session"]["revision"] != revision:
+                revision = state["session"]["revision"]
+                await websocket.send_json({"type": "state", "revision": revision, "state": state})
+            try:
+                message = await asyncio.wait_for(websocket.receive_json(), timeout=1)
+            except asyncio.TimeoutError:
+                continue
+            if isinstance(message, dict) and message.get("type") == "heartbeat":
+                await asyncio.to_thread(sessions.heartbeat, str(sid), user)
+            elif isinstance(message, dict) and message.get("type") == "ping":
+                await websocket.send_json({"type": "pong"})
+            else:
+                await websocket.close(code=1008)
+                return
+    except asyncio.TimeoutError:
+        await websocket.close(code=4401)
+    except (ValueError, TypeError):
+        await websocket.close(code=1008)
+    except HTTPException:
+        await websocket.close(code=4403)
+    except WebSocketDisconnect:
+        return
 
 
 class CreateSession(BaseModel):

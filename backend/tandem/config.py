@@ -25,12 +25,12 @@ DIM = 384
 TAGS_PER_MOVIE = _env("TANDEM_TAGS_PER_MOVIE", 20, int)   # strongest tags kept per film when building
 
 # Meta Muse Spark reads each Explore tile into free-form tags, over the Meta Model API (OpenAI-compatible
-# Chat Completions). Any other OpenAI-compatible vision endpoint works if you override these.
+# Chat Completions). Overrides must support image input, structured output and reasoning settings.
 MUSE_BASE_URL = _env("MUSE_BASE_URL", "https://api.meta.ai/v1")
 MUSE_MODEL = _env("MUSE_MODEL", "muse-spark-1.3")
 MUSE_API_KEY_ENV = "MUSE_API_KEY"
 # Muse Spark thinks before answering; thinking counts against max_tokens, so leave room for it.
-MUSE_REASONING = _env("MUSE_REASONING", "minimal")   # minimal | low | medium | high; "" = model default
+MUSE_REASONING = _env("MUSE_REASONING", "minimal")   # minimal | low | medium | high | xhigh | max; "" = model default
 MUSE_MAX_TOKENS = _env("MUSE_MAX_TOKENS", 4096, int)
 
 # Translator W = I + A Bᵀ (DIM × DIM) and its training.

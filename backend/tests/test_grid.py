@@ -3,7 +3,6 @@ a half-cut bottom row and a nav bar, in light and dark mode."""
 import numpy as np
 import pytest
 from PIL import Image, ImageDraw
-
 from tandem.grid import find_tiles
 
 W, G, T, NAV = 1080, 3, 358, 2190

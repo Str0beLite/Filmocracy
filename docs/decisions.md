@@ -57,3 +57,12 @@ One line each: date, decision, why.
 - 2026-10-25: A real trailer plays to its end. The TV listens to the YouTube embed (postMessage): when it starts playing it tells the room the video's length (`trailerPlaying`, so phones show the right clock), and when it ends it opens voting. The room keeps a backstop timer 5 s past the end; placeholder trailers stay 12 s.
 - 2026-10-25: A feed's votes pull its next recs toward loved films right away (Rocchio on the predicted taste, serving only), so a session reacts before W retrains.
 - 2026-10-25: Popularity is one learned weight on a rank-percentile prior next to W, not something W has to encode; it starts at 0.05.
+
+- 2026-10-25: Use authenticated WebSockets for phone/TV session snapshots and heartbeats; retain HTTP mutation transactions and SSE compatibility, with SQLite revisions providing reconnect synchronization.
+- 2026-10-25: Prepare Railway with the existing unified Dockerfile and explicit dashboard settings; preserve legacy railway.json but do not depend on deprecated config-as-code support for new services.
+
+- 2026-10-25: Selectively integrate upstream 4b41190: Muse Spark via Meta Model API and pixel-based Explore tiling; retain unified Google authentication, SQLite transactions, WebSockets and disabled model training.
+
+- 2026-10-25: Merge main 89a01f0 into deployment preparation, retaining personality-first tags and whole-feed summary/fallback, minimal reasoning and the dev-only preview alongside unified authentication, SQLite sessions and WebSockets.
+
+- 2026-10-25: Prepare watchtandem.tech for Cloudflare Pages and api.watchtandem.tech for Railway with exact-origin CORS, GIS ID tokens and a persistent /data volume; wait for the teammate app branch to replace its mock API before frontend deployment.

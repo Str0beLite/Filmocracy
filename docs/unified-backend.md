@@ -14,8 +14,8 @@ backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 80
 ```
 
 `app:app` forwards to this same application. Docker and Railway use `unified:app`.
-Required: `GOOGLE_CLIENT_ID`. Optional for screenshots: `LLAMA_API_KEY`,
-`LLAMA_BASE_URL`, `LLAMA_MODEL`. Queue preparation requires `YOUTUBE_API_KEY`;
+Required: `GOOGLE_CLIENT_ID`. Optional for screenshots: `MUSE_API_KEY`,
+`MUSE_BASE_URL`, `MUSE_MODEL`, `MUSE_REASONING` (default minimal), `MUSE_MAX_TOKENS` (4096). Queue preparation requires `YOUTUBE_API_KEY`;
 `TRAILER_REGION` defaults to US. Set `FRONTEND_ORIGINS` to exact comma-separated
 frontend origins. `TANDEM_DATA_DIR` contains `tandem.db` and checkpoints; the movie
 vectors/catalog remain under `TANDEM_CATALOG_DIR` (default `backend/catalog`).
@@ -124,14 +124,37 @@ provides mapped movie metadata/trailer links. API schemas are generated in
 
 ## Realtime and reconnect
 
-Use authenticated **Server-Sent Events**, `GET /sessions/{id}/events`. Use `fetch` with
-an Authorization header and parse SSE frames; native EventSource cannot set that
-header. Do not put access tokens in URLs. Each `event: state` contains a complete
-session snapshot; `id` is the persisted SQLite session revision. The stream checks for
-changes every second and sends keepalives. Initial and reconnected streams always send
-a fresh snapshot, so missed events do not require a replay log. Clients should apply
-newer revisions and reconnect with a refreshed Google token after network/auth failure.
-A member who leaves loses snapshot access and the stream emits `access_revoked`.
+Use **WebSockets** at `/sessions/{id}/ws` (`wss://` over HTTPS). After connecting,
+send `{"type":"auth","token":"<fresh Google ID token>"}` within 10 seconds. Credentials
+never belong in the URL. Browser origins must match `FRONTEND_ORIGINS`; CORS middleware
+does not protect WebSockets, so the socket endpoint checks Origin explicitly.
+
+The server sends `{"type":"state","revision":42,"state":{...}}` with a full session
+snapshot immediately after authentication and whenever the persisted revision changes.
+It checks SQLite once per second, rechecking session access on each read. Phones and
+the TV can send `{"type":"heartbeat"}` every 10 seconds to renew their membership leases;
+`{"type":"ping"}` returns `{"type":"pong"}`. Votes, joins and host controls continue through
+the authenticated HTTP endpoints above, retaining the same atomic transactions. Sockets
+broadcast the resulting state; they do not maintain a separate copy of voting state.
+
+Reconnect with a fresh Google token and the same session UUID. Every connection receives
+a fresh snapshot, so missed messages need no replay. Apply only newer revisions within
+each connection. Close codes: `4401` = authentication required/failed, `4403` = no session
+access (including a member who leaves), `1008` = invalid origin/message. Browser origin
+rejection can appear as a failed handshake rather than a close frame. Retry network
+failures with backoff; refresh Google sign-in on 4401; stop retrying on 4403. This is not
+an identity provider: Google still performs authentication, while SQLite stores profiles,
+feed ownership and session authorization.
+
+`frontend/session-client.js` exports `connectSession({apiUrl,sessionId,getToken,onState,
+onClose})` for either phones or the TV. It authenticates, heartbeats, filters stale
+snapshots and returns the socket (`socket.close()` disconnects). The UI owns reconnect
+backoff and sign-in handling in `onClose`; the helper does not silently retry. There is
+no rendered frontend application in this repository yet. WebSocket routes do not appear
+in FastAPI's HTTP OpenAPI specification; this section is their wire contract.
+
+The authenticated SSE endpoint `GET /sessions/{id}/events` remains available for existing
+clients, using an Authorization header, complete state events and persisted revision IDs.
 
 The TV stores only its session UUID. `frontend/session-client.js` restores Google
 identity through `/me` and validates host ownership before reuse; network/401 failures
@@ -153,9 +176,9 @@ accepted vote. Existing queues continue; retry queue preparation or use host ski
 
 Railway requires a persistent volume at `/data`, `TANDEM_DATA_DIR=/data`, one replica
 and one Uvicorn worker. The manifest requires the mount and disables sleeping. Both
-SQLite and existing model checkpoints must survive together. Local file-close/reopen
-tests verify persistence; an actual Railway volume/restart and Docker image build have
-not been exercised here. No deployment or push is performed. A wheel installation
+SQLite and existing model checkpoints must survive together. Local file-close/reopen, process restart, and Docker container replacement
+tests verify persistence; the Docker image build and its full session workflow passed.
+An actual Railway volume/redeploy has not been exercised; see [local verification](local-verification.md). No deployment or push is performed. A wheel installation
 must point TANDEM_CATALOG_DIR at the existing catalog plus metadata snapshot.
 
 ## Verification
@@ -172,3 +195,7 @@ provider/feedback failure recovery, idempotent metadata copies, restart persiste
 SSE snapshots/reconnection, original recommendation routes and the exported contract.
 Main's recommendation tests remain unchanged. Historical Supabase migrations stay in
 `supabase/migrations` solely to preserve the already-applied remote history.
+
+See the [Railway production handoff](railway-deployment.md) for current dashboard settings, production variables, approval boundaries and the post-deployment checklist.
+
+Screenshot uploads now split Instagram Explore grids using `tandem/grid.py` and send each crop to Muse Spark; plain images stay whole. A text-only Muse pass summarizes the non-noise tile tags, falling back to their average if it fails. Provider failures return 503 and create no partial feed. See the Railway handoff for the verified provider request contract and outstanding live-key check.

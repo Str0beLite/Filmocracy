@@ -1,17 +1,24 @@
 <!doctype html>
-<!-- Try the screenshot -> tags step in a browser. Open this file directly; it talks to a running API with TANDEM_DEV_AUTH=1. -->
+<!-- Try the screenshot -> tags step in a browser. Serve this directory at http://localhost:5173; it talks to a running API with TANDEM_DEV_AUTH=1. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Feed Tag Demo</title>
 <style>
-  :root { --bg: #f7f6f3; --card: #fff; --text: #1c1b19; --muted: #6b6862; --line: #e2dfd8; --accent: #c2410c; --on-accent: #fff; --bar: #fed7aa; }
+  :root { color-scheme: light; --bg: #f7f6f3; --card: #fff; --text: #1c1b19; --muted: #6b6862; --line: #e2dfd8; --accent: #c2410c; --on-accent: #fff; --bar: #fed7aa; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #161513; --card: #201f1c; --text: #ece9e3; --muted: #9c978e; --line: #35332f; --accent: #fb923c; --on-accent: #1c1b19; --bar: #7c2d12; }
+    :root { color-scheme: dark; --bg: #161513; --card: #201f1c; --text: #ece9e3; --muted: #9c978e; --line: #35332f; --accent: #fb923c; --on-accent: #1c1b19; --bar: #7c2d12; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, sans-serif; }
+  .skip { position: absolute; left: 16px; top: -60px; background: var(--card); color: var(--text); padding: 8px; }
+  .skip:focus { top: 8px; }
+  button, input { touch-action: manipulation; }
+  button:hover:not(:disabled) { filter: brightness(.9); }
+  button:active:not(:disabled) { filter: brightness(.8); }
+  li { gap: 10px; min-width: 0; overflow-wrap: anywhere; }
+  li span:first-child { min-width: 0; }
   main { max-width: 640px; margin: 0 auto; padding: 32px 16px; }
   h1 { font-size: 1.5rem; margin: 0 0 4px; }
   p.sub { color: var(--muted); margin: 0 0 24px; }
@@ -39,18 +46,19 @@
 </style>
 </head>
 <body>
-<main>
+<a class="skip" href="#main">Skip to content</a>
+<main id="main">
   <h1>Feed → tags</h1>
-  <p class="sub">Upload Instagram Explore screenshots. Each tile goes to Muse Spark, and the tags are merged.</p>
+  <p class="sub">Upload Instagram Explore screenshots. Each tile goes to Muse Spark, then one text-only pass summarizes the feed.</p>
   <form id="f">
     <label>Screenshots <input type="file" name="files" accept="image/*" multiple required></label>
     <div class="row">
-      <label>API <input type="text" id="api" value="http://localhost:8000" spellcheck="false"></label>
-      <label>User name <input type="text" id="user" value="demo" spellcheck="false"></label>
+      <label>API <input type="url" id="api" name="api" autocomplete="off" value="http://localhost:8000" spellcheck="false"></label>
+      <label>User name <input type="text" id="user" name="user" autocomplete="username" value="demo" spellcheck="false"></label>
     </div>
     <button type="submit">Read tags</button>
   </form>
-  <p id="status" role="status" aria-live="polite"></p>
+  <p id="status" tabindex="-1" role="status" aria-live="polite"></p>
   <ul id="tags"></ul>
   <h2 id="recs-h" hidden>Top 5 films</h2>
   <ol id="recs"></ol>
@@ -62,7 +70,7 @@
     e.preventDefault();
     const btn = form.querySelector("button");
     btn.disabled = true; list.replaceChildren(); recs.replaceChildren(); recsH.hidden = true; status.className = "";
-    status.textContent = "Reading screenshots… (one Muse call per tile, can take a while)";
+    status.textContent = "Reading screenshots… (one Muse call per tile plus a feed summary; this can take a while)";
     try {
       const api = document.getElementById("api").value.replace(/\/$/, "");
       const headers = { Authorization: "Bearer " + document.getElementById("user").value };
@@ -91,7 +99,7 @@
       }
       recsH.hidden = false;
     } catch (err) {
-      status.className = "err"; status.textContent = "Failed: " + err.message;
+      status.className = "err"; status.textContent = "Failed: " + err.message + ". Check the API address and local development server, then retry."; status.focus();
     } finally { btn.disabled = false; }
   });
 </script>

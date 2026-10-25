@@ -11,7 +11,6 @@ import pytest
 import torch
 from fastapi import Header
 from fastapi.testclient import TestClient
-
 from tandem import config, vision
 from tandem.api import create_app
 from tandem.auth import current_user

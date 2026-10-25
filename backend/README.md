@@ -1,4 +1,6 @@
-> **Unified SQLite service:** Docker/Railway run `unified:app`; `app:app` is an alias. Use [the integration guide](../docs/unified-backend.md) for durable QR sessions, atomic votes, authorized SSE updates, metadata migration and deployment. Supabase is no longer required. All recommendation routes below remain available; unified disables model training.
+> **watchtandem.tech deployment:** See [the production guide](../docs/production-deployment.md) for Railway, Cloudflare Pages, custom domains, Google configuration and the frontend completion blocker.
+
+> **Unified SQLite service:** Docker/Railway run `unified:app`; `app:app` is an alias. Use [the integration guide](../docs/unified-backend.md) for durable QR sessions, atomic votes, authenticated WebSocket updates (with SSE compatibility), metadata migration and deployment. Supabase is no longer required. All recommendation routes below remain available; unified disables model training.
 >
 > Run from the repository root: `backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 8000`. Use main's Google ID tokens, GOOGLE_CLIENT_ID, and a YOUTUBE_API_KEY for queue validation. The standalone documentation below retains its original live-training development mode.
 
@@ -27,7 +29,7 @@ Code map: `tandem/model.py` (W, loss), `tandem/trainer.py` (loop, gate, hot-swap
 
 ### 1. Get the keys
 
-Copy `backend/.env.example` to `backend/.env` and fill it in. `.env` is gitignored.
+Create an ignored `backend/.env` using the variables below and the [Railway production variable table](../docs/railway-deployment.md#production-variables). Use `MUSE_*` names; environment example files are excluded from this integration commit and the tracked example may still show legacy `LLAMA_*` names.
 
 | Key | Needed for | Where to get it |
 |---|---|---|
@@ -46,7 +48,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 ```
 
-The vision call goes to the Meta Model API's OpenAI-compatible Chat Completions. Defaults: `MUSE_BASE_URL=https://api.meta.ai/v1`, `MUSE_MODEL=muse-spark-1.3`. `muse-spark-1.3-contributor` is about 10x cheaper, but Meta may train on those requests. Any other OpenAI-compatible vision endpoint works too.
+The vision call goes to the Meta Model API's OpenAI-compatible Chat Completions. Defaults: `MUSE_BASE_URL=https://api.meta.ai/v1`, `MUSE_MODEL=muse-spark-1.3`. Overrides must support the same image, structured-output and reasoning request fields.
 
 ### 3. Catalog (already built and committed)
 
@@ -109,7 +111,7 @@ python scripts/seed_fake.py --api http://localhost:8000      # 60 fake users, ab
 
 The algorithm is done: tags to x, W, recs, group lists, live training and the recall gate. Two pieces are owned by teammates now.
 
-**1. Screenshots → feed tags (`tandem/vision.py`).** Tested against the real Muse API on real Explore screenshots. The contract the rest of the code depends on:
+**1. Screenshots → feed tags (`tandem/vision.py`).** Upstream reports real Explore screenshot testing; this branch verified a synthetic-image request (see the verification log). The contract the rest of the code depends on:
 - `read_screenshots([(bytes, media_type), ...])` returns one `(is_noise, {tag: weight 0..1})` per screenshot.
 - `summarize(readings)` (async) returns `({tag: weight}, n_dropped)`: one text-only call sums up every tile's tags, falling back to `merge()`'s plain average.
 - `POST /feeds` passes that dict to `catalog.feed_vector`, which turns it into x.
@@ -178,3 +180,7 @@ Hugging Face Spaces (Docker, free CPU) also works, but its disk is wiped on rest
 | `TANDEM_FAKE_ENCODER` | 0 | 1 = hashing encoder instead of bge-small (tests, offline dev) |
 
 All other knobs (rank, τ, λ, learning rate, steps) are in `tandem/config.py`.
+
+See the [Railway production handoff](../docs/railway-deployment.md) for current dashboard settings, production variables, approval boundaries and the post-deployment checklist.
+
+For the development-only vision demo with the unified API, serve `backend/scripts` with `python3 -m http.server 5173 --directory backend/scripts` and open `http://localhost:5173/vision_demo.html`. Keep the API on port 8000 with `TANDEM_DEV_AUTH=1` locally. This matches the default allowed frontend origin; opening the file directly has Origin `null` and is intentionally not allowed by unified CORS. Do not enable development auth on Railway.

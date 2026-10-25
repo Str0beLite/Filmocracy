@@ -39,3 +39,24 @@ test("network and authentication failures preserve session identity for retry", 
     assert.ok(f.calls.every(c => c.options.method === "GET"));
   }
 });
+
+test("WebSocket authenticates without a URL token and applies fresh snapshots", async () => {
+  const { connectSession } = await import(`data:text/javascript,${encodeURIComponent(source)}`);
+  class Socket {
+    constructor(url) { this.url = url; this.sent = []; this.readyState = 1; }
+    send(data) { this.sent.push(JSON.parse(data)); }
+  }
+  const states = [];
+  const ws = await connectSession({ apiUrl: "https://api.example", sessionId: "session-1",
+    getToken: async () => "private-token", onState: state => states.push(state),
+    WebSocketImpl: Socket });
+  assert.equal(ws.url, "wss://api.example/sessions/session-1/ws");
+  ws.onopen();
+  try {
+    assert.deepEqual(ws.sent, [{ type: "auth", token: "private-token" }]);
+    for (const revision of [2, 1, 2, 3]) ws.onmessage({ data: JSON.stringify({
+      type: "state", revision, state: { revision },
+    }) });
+    assert.deepEqual(states, [{ revision: 2 }, { revision: 3 }]);
+  } finally { ws.onclose({ code: 1000 }); }
+});

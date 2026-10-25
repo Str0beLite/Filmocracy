@@ -1,7 +1,8 @@
-"""The only LLM step: Meta Muse Spark reads each Explore tile into tags with weights, then one text-only call sums up the person.
+"""Muse Spark reads Explore tiles into tags, then summarizes the whole feed in one text-only call.
 
 Talks to the Meta Model API's OpenAI-compatible Chat Completions (see config.MUSE_*).
 """
+
 import asyncio
 import base64
 import json
@@ -25,10 +26,14 @@ SCHEMA = {
     "type": "object",
     "properties": {
         "is_ad_or_noise": {"type": "boolean"},
-        "tags": {"type": "array", "items": {
-            "type": "object",
-            "properties": {"tag": {"type": "string"}, "weight": {"type": "number", "minimum": 0, "maximum": 1}},
-            "required": ["tag", "weight"]}},
+        "tags": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"tag": {"type": "string"}, "weight": {"type": "number", "minimum": 0, "maximum": 1}},
+                "required": ["tag", "weight"],
+            },
+        },
     },
     "required": ["is_ad_or_noise", "tags"],
 }
@@ -52,7 +57,7 @@ MAX_TAGS = 20
 def parse_reply(text):
     """Tolerant parse: strip code fences, tidy tag strings, clamp weights. Returns (is_noise, {tag: w})."""
     text = re.sub(r"^```(?:json)?|```$", "", text.strip(), flags=re.MULTILINE).strip()
-    data = json.loads(text[text.find("{"): text.rfind("}") + 1])
+    data = json.loads(text[text.find("{") : text.rfind("}") + 1])
     tags = {}
     for t in data.get("tags", [])[:MAX_TAGS]:
         name = " ".join(str(t.get("tag", "")).lower().split())[:60]
@@ -82,12 +87,20 @@ async def read_screenshots(screenshots, concurrency=6):
         async with sem:
             uri = f"data:{media_type};base64,{base64.standard_b64encode(data).decode()}"
             try:
-                return await _ask(client, [{"type": "image_url", "image_url": {"url": uri}},
-                                           {"type": "text", "text": PROMPT}])
-            except (ValueError, KeyError, TypeError):
-                return True, {}   # unreadable reply: treat that screenshot as noise rather than fail the upload
+                return await _ask(
+                    client, [{"type": "image_url", "image_url": {"url": uri}}, {"type": "text", "text": PROMPT}]
+                )
+            except (ValueError, KeyError, TypeError, IndexError, AttributeError):
+                return True, {}  # unreadable reply: treat that screenshot as noise rather than fail the upload
 
-    return await asyncio.gather(*[one(d, m) for d, m in screenshots])
+    tasks = [asyncio.create_task(one(d, m)) for d, m in screenshots]
+    try:
+        return await asyncio.gather(*tasks)
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await client.close()
 
 
 SYNTH_PROMPT = (
@@ -111,12 +124,18 @@ async def summarize(readings):
     kept = [tags for noise, tags in readings if not noise and tags]
     if len(kept) < 2:
         return avg, dropped
-    lines = "\n".join(f"post {i + 1}: " + ", ".join(f"{t} {w:.2f}" for t, w in tags.items())
-                      for i, tags in enumerate(kept))
+    lines = "\n".join(
+        f"post {i + 1}: " + ", ".join(f"{t} {w:.2f}" for t, w in tags.items()) for i, tags in enumerate(kept)
+    )
+    client = None
     try:
-        _, tags = await _ask(_client(), [{"type": "text", "text": SYNTH_PROMPT.format(lines=lines)}])
+        client = _client()
+        _, tags = await _ask(client, [{"type": "text", "text": SYNTH_PROMPT.format(lines=lines)}])
     except Exception:  # noqa: BLE001 - the average is a fine answer, never fail the upload over this
         return avg, dropped
+    finally:
+        if client is not None:
+            await client.close()
     return tags or avg, dropped
 
 
