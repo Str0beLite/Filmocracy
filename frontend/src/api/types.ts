@@ -11,7 +11,7 @@ export interface Rec {
   tags: string[];
   score: number;
   because_of: string[];
-  explore?: boolean; // one of the backend's exploration picks (ranks 11–50)
+  explore?: boolean; // picked from outside the top 10 thanks to the ranking noise (TANDEM_TEMPERATURE)
 }
 
 // Runtime, genres and logline come from the backend's movie metadata; the

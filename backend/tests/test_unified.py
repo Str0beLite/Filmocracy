@@ -231,11 +231,12 @@ def test_failures_cannot_undo_votes_and_restart_preserves_data(setup, monkeypatc
             store.db.execute("DROP TRIGGER fail_feedback")
             store.db.commit()
         assert c.app.state.sessions.sync_feedback(0) == 1
-        before = {m["movie_id"] for m in get(c, f"/sessions/{sid}").json()["session_movies"]}
+        shown = {m["movie_id"] for m in get(c, f"/sessions/{sid}").json()["session_movies"] if m["shown_at"]}
         monkeypatch.setattr(c.app.state.integration, "playable", playable)
         assert post(c, f"/sessions/{sid}/queue").json()["added"] > 0
         after = get(c, f"/sessions/{sid}").json()["session_movies"]
-        assert len(after) == len({m["movie_id"] for m in after}) and before < {
+        # Unshown films are re-picked (with noise); shown ones stay.
+        assert len(after) == len({m["movie_id"] for m in after}) and shown < {
             m["movie_id"] for m in after
         }
     dbpath = Path(store.db.execute("PRAGMA database_list").fetchone()[2])

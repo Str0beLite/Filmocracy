@@ -1,4 +1,4 @@
-"""Serve 10 films: 8 best by the current W, plus 2 exploration picks from ranks 11–50."""
+"""Serve 10 films sampled from the current W's ranking with Gumbel noise (config.TEMPERATURE), so obscure fits surface."""
 import random
 
 import numpy as np
@@ -47,17 +47,13 @@ def boost(scores, movies, tags):
 
 
 def pick(scores, exclude=(), rng=random):
-    """Returns [{idx, rank, explore}], where rank is the position in the pure model ranking."""
+    """Returns [{idx, rank, explore}]: N_RECS films by score + TEMPERATURE * Gumbel noise (sampling from softmax(score/T)
+    without replacement). rank is the position in the pure ranking; explore = it would not have made the list without noise."""
     s = scores.astype(np.float64).copy()
     if exclude:
         s[list(exclude)] = -np.inf
-    order = [int(i) for i in np.argsort(-s) if np.isfinite(s[i])]
-    n_best = config.N_RECS - config.N_EXPLORE
-    best = [{"idx": i, "rank": r, "explore": False} for r, i in enumerate(order[:n_best])]
-    lo, hi = config.EXPLORE_RANKS
-    pool = list(range(max(lo, n_best), min(hi, len(order))))
-    explore = [{"idx": order[r], "rank": r, "explore": True} for r in rng.sample(pool, min(config.N_EXPLORE, len(pool)))]
-    out = list(best)
-    for e in explore:  # tuck exploration picks in below the top 2 so they don't look like filler at the end
-        out.insert(rng.randint(min(2, len(out)), len(out)), e)
-    return out
+    rank = np.empty(len(s), int)
+    rank[np.argsort(-s)] = np.arange(len(s))
+    noisy = s + config.TEMPERATURE * np.random.default_rng(rng.getrandbits(32)).gumbel(size=len(s))
+    chosen = [int(i) for i in np.argsort(-noisy)[: config.N_RECS] if np.isfinite(s[i])]
+    return [{"idx": i, "rank": int(rank[i]), "explore": bool(rank[i] >= config.N_RECS)} for i in chosen]

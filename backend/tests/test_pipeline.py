@@ -323,3 +323,17 @@ def test_queue_scores_add_each_voters_mood():
     lift = recs.scores([(feed, "laugh"), (feed, None)]) - recs.scores([(feed, None), (feed, None)])
     # half the room wants to laugh: comedies get half the boost, nothing else moves
     assert np.allclose(lift[:5], config.TAG_BOOST / 2) and np.allclose(lift[5:], 0)
+
+
+def test_pick_samples_with_temperature(monkeypatch):
+    import random
+
+    from tandem.recommend import pick
+
+    s = np.linspace(1, 0, 500)
+    monkeypatch.setattr(config, "TEMPERATURE", 0.0)
+    assert [it["idx"] for it in pick(s)] == list(range(config.N_RECS))
+    monkeypatch.setattr(config, "TEMPERATURE", 0.05)
+    runs = [[it["idx"] for it in pick(s, exclude={0}, rng=random.Random(k))] for k in range(20)]
+    assert all(0 not in r and len(set(r)) == config.N_RECS for r in runs)
+    assert len({tuple(r) for r in runs}) == 20 and max(max(r) for r in runs) > 3 * config.N_RECS
