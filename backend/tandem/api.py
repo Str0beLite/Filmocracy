@@ -14,12 +14,14 @@ from typing import Annotated, Literal, Optional
 import numpy as np
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from openai import APIError
 from pydantic import BaseModel
 
-from . import config, vision
+from . import config, grid, vision
 from .auth import current_user, require_admin
 from .catalog import Catalog
 from .encoder import get_encoder, unit
+from .model import Translator
 from .recommend import because_of, boost, pick, score_feed
 from .store import Store
 from .trainer import Trainer
@@ -46,9 +48,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         state["trainer"].stop()
 
     app = FastAPI(title="tandem", lifespan=lifespan)
-    app.add_middleware(
-        CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
-    )
+    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
     app.state.tandem = state
     # shortcut: groups live in memory and are lost on restart; move to SQLite if sessions must survive deploys.
     state["groups"] = {}
@@ -65,7 +65,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         """10 recs for one feed's x, logged under that feed so feedback and exploration work as usual."""
         cat, store = state["catalog"], state["store"]
         v, model = state["trainer"].current()
-        s = boost(score_feed(model, f["x"], cat.vecs), cat.movies, boost_tags)
+        s = boost(score_feed(model, f["x"], cat.vecs, cat.prior, *store.votes(f["id"])), cat.movies, boost_tags)
         items = pick(s, exclude=store.rated_movies(f["id"]) | set(exclude))
         ids = store.add_recs(f["id"], items, v)
         return v, [
@@ -96,7 +96,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         files: Annotated[list[UploadFile], File()] = (),
         user: str = Depends(identity),
     ):
-        """Upload feed screenshots (read by Llama vision) and/or a JSON {tag: weight} map. Returns a feed_id."""
+        """Upload screenshots (Explore tiles read by Muse Spark) or a JSON {tag: weight} map. Returns a feed_id."""
         cat = state["catalog"]
         try:
             manual = json.loads(tags) if tags.strip() else {}
@@ -107,16 +107,21 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
                 raise ValueError()
         except (ValueError, TypeError):
             raise HTTPException(422, "tags must be a JSON map of numeric weights")
-        shots = [(await f.read(), f.content_type or "image/png") for f in files]
+        shots = []
+        for f in files:
+            data = await f.read()
+            tiles = await asyncio.to_thread(grid.split_explore, data)
+            shots.extend(tiles or [(data, f.content_type or "image/png")])
         if not manual and not shots:
             raise HTTPException(400, "send at least one screenshot, or tags as JSON")
         weights, dropped = {}, 0
         if shots:
             if not vision.has_api_key():
-                raise HTTPException(
-                    503, f"screenshots need {config.LLAMA_API_KEY_ENV}; send tags instead"
-                )
-            weights, dropped = vision.merge(await vision.read_screenshots(shots))
+                raise HTTPException(503, f"screenshots need {config.MUSE_API_KEY_ENV}; send tags instead")
+            try:
+                weights, dropped = await vision.summarize(await vision.read_screenshots(shots))
+            except APIError:
+                raise HTTPException(503, "Muse vision unavailable; retry or send tags instead")
         for t, w in manual.items():
             t = " ".join(str(t).lower().split())
             weights[t] = max(weights.get(t, 0.0), float(w))
@@ -135,16 +140,39 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
     def me(user: str = Depends(identity)):
         """The caller's latest feed. feed_id null = send them to onboarding (upload screenshots)."""
         f = state["store"].latest_feed(user)
-        return (
-            {"user": user, "feed_id": f["id"], "tags": f["tags"]}
-            if f
-            else {"user": user, "feed_id": None}
-        )
+        return {"user": user, "feed_id": f["id"], "tags": f["tags"]} if f else {"user": user, "feed_id": None}
+
+    if config.DEV_AUTH:
+        # shortcut: dev-only identity-W preview with a popularity nudge; no events or recommendations are logged.
+        @app.get("/dev/feeds/{fid}/top")
+        def top_recs(
+            fid: str,
+            k: int = Query(5, ge=1, le=50),
+            pop: float = Query(0.05, ge=0, le=1),
+            user: str = Depends(identity),
+        ):
+            f, cat = _feed(fid, user), state["catalog"]
+            model = Translator(cat.w0).eval()  # A = 0, so W = W0 = I
+            counts = np.array([m.get("popularity", 0) for m in cat.movies])
+            pct = counts.argsort().argsort() / (len(counts) - 1)  # 0 = least rated film, 1 = most rated
+            s = score_feed(model, f["x"], cat.vecs) + pop * pct**2
+            return {
+                "w_version": "identity",
+                "pop": pop,
+                "recs": [
+                    {
+                        **cat.public(int(i)),
+                        "score": float(s[i]),
+                        "because_of": because_of(model, f["tags"], cat.vecs[i]),
+                    }
+                    for i in np.argsort(-s)[:k]
+                ],
+            }
 
     class Favourites(BaseModel):
         titles: list[str] = []
-        movie_ids: list[int] = []   # exact catalog ids, when the client already knows the film
-        holdout_frac: float = 0.3   # hide this share for the held-out recall check
+        movie_ids: list[int] = []  # exact catalog ids, when the client already knows the film
+        holdout_frac: float = 0.3  # hide this share for the held-out recall check
 
     @app.post("/feeds/{fid}/favourites")
     def add_favourites(fid: str, body: Favourites, user: str = Depends(identity)):
@@ -191,9 +219,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         if missing:
             raise HTTPException(409, {"needs_onboarding": missing})
         g["members"].update(feeds)
-        g["avg_x"] = unit(np.mean([f["x"] for f in g["members"].values()], axis=0)).astype(
-            np.float32
-        )
+        g["avg_x"] = unit(np.mean([f["x"] for f in g["members"].values()], axis=0)).astype(np.float32)
 
     def _group_out(gid, g):
         return {"group_id": gid, "host": g["host"], "members": list(g["members"])}
@@ -236,7 +262,9 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
         for uid, f in g["members"].items():
             v, users[uid] = _recs(f, body.boost, exclude)
         v, model = state["trainer"].current()
-        s = boost(score_feed(model, g["avg_x"], cat.vecs), cat.movies, body.boost)
+        votes = [state["store"].votes(f["id"]) for f in g["members"].values()]
+        pos, neg = set().union(*(p for p, _ in votes)), set().union(*(n for _, n in votes))
+        s = boost(score_feed(model, g["avg_x"], cat.vecs, cat.prior, pos, neg), cat.movies, body.boost)
         group = [
             {
                 "rec_id": None,
@@ -251,9 +279,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
     class Feedback(BaseModel):
         rec_id: Optional[int] = None
         feed_id: Optional[str] = None
-        movie_id: Optional[int] = (
-            None  # catalog movie id, for feedback outside a rec list (e.g. a group vote)
-        )
+        movie_id: Optional[int] = None  # catalog movie id, for feedback outside a rec list (e.g. a group vote)
         label: Literal["love", "seen_loved", "nah"]
 
     @app.post("/feedback")
@@ -300,10 +326,7 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
 
     @app.get("/movies/search")
     def search(q: str, limit: int = 10, user=Depends(principal or public)):
-        return [
-            state["catalog"].public(state["catalog"].id_to_idx[m["id"]])
-            for m in state["catalog"].search(q, limit)
-        ]
+        return [state["catalog"].public(state["catalog"].id_to_idx[m["id"]]) for m in state["catalog"].search(q, limit)]
 
     return app
 

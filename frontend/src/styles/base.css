@@ -1,0 +1,676 @@
+﻿/* Velvet: a cinema at night. Wine-dark house, red velvet, gold trim.
+   Every colour on screen comes from these tokens. */
+
+:root {
+  color-scheme: dark;
+  --font-display: 'Fraunces Variable', Georgia, serif;
+  --font-body: 'DM Sans Variable', system-ui, sans-serif;
+
+  --stage: #0c0708;
+  --stage-2: #1d0e12;
+  --bg: #150b0e;
+  --surface: #221318;
+  --surface-2: #301b21;
+  --line: rgba(246, 234, 216, 0.12);
+  --line-strong: rgba(246, 234, 216, 0.28);
+  --text: #f6ead8;
+  --muted: #b9a391;
+  --accent: #d12f45;
+  --accent-hover: #e0435a;
+  --accent-ink: #fff4ec;
+  --gold: #f4c55a;
+  --gold-deep: #c98a10;
+  --gold-ink: #2a1800;
+  --yes: #4fd18b;
+  --yes-ink: #052414;
+  --no: #ff5a5f;
+  --seat: #6e1b2a;
+  --seat-2: #3e0c17;
+  --curtain-a: #8a1729;
+  --curtain-b: #3e0812;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-pop: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Screens that sit on video or gold stay light-on-dark. */
+.on-film {
+  --text: #fff;
+  --muted: rgba(255, 255, 255, 0.7);
+  --line: rgba(255, 255, 255, 0.16);
+  --surface: rgba(255, 255, 255, 0.08);
+  --surface-2: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+}
+
+.on-gold {
+  --text: #fff6dc;
+  --muted: rgba(255, 246, 220, 0.74);
+  --line: rgba(255, 246, 220, 0.22);
+  --surface: rgba(255, 246, 220, 0.08);
+  color: var(--text);
+}
+
+/* ---- Base ---- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--stage);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  caret-color: var(--gold);
+  scrollbar-color: var(--surface-2) transparent;
+}
+
+::selection {
+  background: var(--gold);
+  color: var(--gold-ink);
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+button,
+a {
+  touch-action: manipulation;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  font-variation-settings: 'SOFT' 50;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Wordmark: two overlapping seats, red and gold ---- */
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  font-family: var(--font-display);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+
+.wordmark-mark {
+  position: relative;
+  width: 1.25em;
+  height: 0.8em;
+}
+
+.wordmark-mark::before,
+.wordmark-mark::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 50%;
+}
+
+.wordmark-mark::before {
+  left: 0;
+  background: var(--accent);
+}
+
+.wordmark-mark::after {
+  right: 0;
+  background: var(--gold);
+  opacity: 0.92;
+}
+
+/* ---- People ---- */
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 2em;
+  height: 2em;
+  border-radius: 50%;
+  background: var(--who);
+  color: #1a1208;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: inset 0 -0.12em 0 rgba(0, 0, 0, 0.18);
+}
+
+.room-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.45em 0.95em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.live-dot {
+  display: inline-block;
+  flex: none;
+  width: 0.55em;
+  height: 0.55em;
+  border-radius: 50%;
+  background: var(--yes);
+  animation: live 1.6s ease-in-out infinite;
+}
+
+/* ---- Completion status: a loading bar toward tonight's movie ---- */
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+  width: 17em;
+  padding: 0.8em 1em 0.9em;
+  border: 1px solid var(--line);
+  border-radius: 0.9em;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.status-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 0.95em;
+  font-weight: 600;
+}
+
+.status-head span {
+  color: var(--muted);
+}
+
+.status-head b {
+  font-variant-numeric: tabular-nums;
+}
+
+.status-track {
+  height: 0.5em;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--surface-2);
+}
+
+.status-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.22) 25%, transparent 25% 50%, rgba(255, 255, 255, 0.22) 50% 75%, transparent 75%),
+    linear-gradient(90deg, var(--accent), var(--gold));
+  background-size:
+    1em 1em,
+    100% 100%;
+  animation: loading-stripes 0.8s linear infinite;
+  transition: width 1.2s var(--ease-out);
+}
+
+.status.is-done .status-head b {
+  color: var(--gold);
+}
+
+.status.is-done .status-track i {
+  background: var(--gold);
+  animation: none;
+}
+
+/* ---- Seats ---- */
+
+.seat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 9.6em;
+}
+
+.seat-back {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 7.4em;
+  height: 6.2em;
+  border-radius: 2.6em 2.6em 0.9em 0.9em;
+  background: linear-gradient(180deg, var(--seat), var(--seat-2));
+  box-shadow:
+    inset 0 0.3em 0 rgba(255, 255, 255, 0.14),
+    inset 0 -0.6em 1em rgba(0, 0, 0, 0.3);
+}
+
+.seat-cushion {
+  width: 8.8em;
+  height: 1.3em;
+  margin-top: -0.35em;
+  border-radius: 0.7em;
+  background: var(--seat-2);
+  box-shadow: inset 0 0.2em 0 rgba(255, 255, 255, 0.12);
+}
+
+.seat .avatar {
+  width: 3.8em;
+  height: 3.8em;
+  font-size: 1.7em;
+}
+
+.seat-name {
+  margin-top: 0.6em;
+  font-size: 1.2em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.seat-feeling {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  margin-top: 0.2em;
+  font-size: 0.95em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.seat-feeling svg {
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--gold);
+}
+
+.seat.is-joining .seat-back,
+.seat.is-joining .seat-cushion {
+  border: 0.16em dashed var(--line-strong);
+  background: transparent;
+  box-shadow: none;
+}
+
+.seat.is-joining .avatar {
+  animation: joining 1.4s ease-in-out infinite;
+}
+
+.seat.is-joining .seat-name {
+  color: var(--muted);
+}
+
+.seat.is-locked .seat-back {
+  box-shadow:
+    0 0 0 0.25em var(--gold),
+    inset 0 0.3em 0 rgba(255, 255, 255, 0.14);
+}
+
+.badge {
+  position: absolute;
+  top: -0.9em;
+  right: -0.9em;
+  display: grid;
+  place-items: center;
+  width: 2.6em;
+  height: 2.6em;
+  border: 0.25em solid var(--bg);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--gold);
+  animation: pop 0.4s var(--ease-pop);
+}
+
+.badge svg {
+  width: 55%;
+  height: 55%;
+}
+
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 12%;
+  width: 60%;
+}
+
+.dots i {
+  width: 22%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--muted);
+  animation: dot 1.2s ease-in-out infinite;
+}
+
+.dots i:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.dots i:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.seat--sm {
+  font-size: 0.62em;
+}
+
+.seat--sm .seat-name {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* ---- Posters (placeholder art from each movie's palette) ---- */
+
+.poster {
+  position: relative;
+  flex: none;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--c1);
+  color: #fff;
+  container-type: inline-size;
+}
+
+.poster-art {
+  position: absolute;
+  inset: 0;
+}
+
+.poster--rays .poster-art {
+  background:
+    radial-gradient(circle at 50% 40%, var(--c3) 0 8%, transparent 8.5%),
+    radial-gradient(circle at 50% 40%, transparent 12%, var(--c1) 62%),
+    repeating-conic-gradient(from 0deg at 50% 40%, var(--c2) 0deg 3deg, transparent 3deg 12deg),
+    var(--c1);
+}
+
+.poster--eye .poster-art {
+  background:
+    radial-gradient(circle at 50% 38%, #111 0 7%, #fff 7.5% 15%, var(--c3) 15.5% 21%, transparent 21.5%),
+    radial-gradient(circle at 50% 38%, var(--c2) 0 34%, transparent 34.5%),
+    linear-gradient(var(--c1), #000);
+}
+
+.poster--halftone .poster-art {
+  background:
+    radial-gradient(circle at 50% 36%, transparent 0 16%, var(--c1) 58%),
+    radial-gradient(var(--c2) 30%, transparent 32%) 0 0 / 8cqw 8cqw,
+    linear-gradient(160deg, var(--c3), var(--c1));
+}
+
+.poster--horizon .poster-art {
+  background:
+    radial-gradient(circle at 50% 56%, var(--c3) 0 15%, transparent 15.5%),
+    repeating-linear-gradient(to bottom, transparent 0 3cqw, rgba(255, 255, 255, 0.12) 3cqw 3.6cqw) 0 56% / 100% 44% no-repeat,
+    linear-gradient(to bottom, var(--c1) 0 56%, var(--c2) 56% 100%);
+}
+
+.poster-type {
+  position: absolute;
+  right: 7cqw;
+  bottom: 7cqw;
+  left: 7cqw;
+  display: flex;
+  flex-direction: column;
+  gap: 2cqw;
+}
+
+.poster-title {
+  font-family: var(--font-display);
+  font-size: 11cqw;
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  text-shadow: 0 1cqw 4cqw rgba(0, 0, 0, 0.5);
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.poster-year {
+  font-size: 5.5cqw;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  opacity: 0.8;
+}
+
+/* ---- Tags ---- */
+
+.wildcard {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  padding: 0.2em 0.6em 0.2em 0.45em;
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  border-radius: 999px;
+  color: var(--gold);
+  font-size: 0.85em;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.wildcard svg {
+  width: 1em;
+  height: 1em;
+}
+
+.pick-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  font-size: 0.9em;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.pick-source svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.pick-source.is-buzzer {
+  color: var(--gold);
+}
+
+.pick-source.is-trailers {
+  color: var(--yes);
+}
+
+/* ---- Confetti ---- */
+
+.confetti {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti i {
+  position: absolute;
+  top: -4%;
+  width: 0.55em;
+  height: 1.1em;
+  border-radius: 0.1em;
+  opacity: 0;
+  animation: confetti-fall linear infinite;
+}
+
+.confetti i.is-wide {
+  width: 1em;
+  height: 0.45em;
+}
+
+/* ---- Motion ---- */
+
+@keyframes live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+}
+
+@keyframes joining {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+@keyframes loading-stripes {
+  from {
+    background-position:
+      1em 0,
+      0 0;
+  }
+  to {
+    background-position:
+      0 0,
+      0 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes countdown {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes confetti-fall {
+  0% {
+    top: -4%;
+    opacity: 1;
+    transform: translateX(0) rotate(var(--rot)) rotateY(0deg);
+  }
+  100% {
+    top: 104%;
+    opacity: 1;
+    transform: translateX(var(--sway)) rotate(calc(var(--rot) + 600deg)) rotateY(900deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .confetti {
+    display: none;
+  }
+}
+
+/* ---- Connection ---- */
+
+.connecting {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 14px;
+  min-height: 100dvh;
+  font-size: 28px;
+}
+
+.connecting p {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.offline {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 200;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 700;
+  transform: translateX(-50%);
+}

@@ -24,11 +24,14 @@ FAKE_ENCODER = _env("TANDEM_FAKE_ENCODER", "0") == "1"
 DIM = 384
 TAGS_PER_MOVIE = _env("TANDEM_TAGS_PER_MOVIE", 20, int)   # strongest tags kept per film when building
 
-# Meta Llama vision model that turns a feed screenshot into free-form tags. Any OpenAI-compatible
-# endpoint works: Meta's Llama API (default), Together, Groq, or a local Ollama (llama3.2-vision).
-LLAMA_BASE_URL = _env("LLAMA_BASE_URL", "https://api.llama.com/compat/v1/")
-LLAMA_MODEL = _env("LLAMA_MODEL", "Llama-4-Maverick-17B-128E-Instruct-FP8")
-LLAMA_API_KEY_ENV = "LLAMA_API_KEY"
+# Meta Muse Spark reads each Explore tile into free-form tags, over the Meta Model API (OpenAI-compatible
+# Chat Completions). Any other OpenAI-compatible vision endpoint works if you override these.
+MUSE_BASE_URL = _env("MUSE_BASE_URL", "https://api.meta.ai/v1")
+MUSE_MODEL = _env("MUSE_MODEL", "muse-spark-1.3")
+MUSE_API_KEY_ENV = "MUSE_API_KEY"
+# Muse Spark thinks before answering; thinking counts against max_tokens, so leave room for it.
+MUSE_REASONING = _env("MUSE_REASONING", "minimal")   # minimal | low | medium | high; "" = model default
+MUSE_MAX_TOKENS = _env("MUSE_MAX_TOKENS", 4096, int)
 
 # Translator W = I + A Bᵀ (DIM × DIM) and its training.
 RANK = _env("TANDEM_RANK", 8, int)
@@ -50,6 +53,8 @@ EXPLORE_RANKS = (10, 50)   # exploration picks come from ranks 11–50
 POSITIVE_LABELS = {"love", "seen_loved", "favourite"}
 NEGATIVE_LABELS = {"nah"}
 TAG_BOOST = _env("TANDEM_TAG_BOOST", 0.15, float)   # added to films carrying any tag the host asked to boost
+POP_INIT = _env("TANDEM_POP_INIT", 0.05, float)     # starting weight on the popularity prior; training learns it from there
+VOTE_PULL = _env("TANDEM_VOTE_PULL", 0.1, float)    # each vote (up to 10) pulls the taste this far toward loved films, before any retrain
 
 # Auth: Google ID tokens must be issued for this OAuth client. Admin endpoints need X-Admin-Token.
 GOOGLE_CLIENT_ID = _env("GOOGLE_CLIENT_ID", "")

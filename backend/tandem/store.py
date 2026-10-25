@@ -98,6 +98,12 @@ class Store:
     def rated_movies(self, fid):
         return {r["movie_idx"] for r in self._all("SELECT movie_idx FROM events WHERE feed_id=?", (fid,))}
 
+    def votes(self, fid):
+        """(loved, passed) movie indices on one feed."""
+        rows = self._all("SELECT movie_idx, label FROM events WHERE feed_id=?", (fid,))
+        return ({r["movie_idx"] for r in rows if r["label"] in config.POSITIVE_LABELS},
+                {r["movie_idx"] for r in rows if r["label"] in config.NEGATIVE_LABELS})
+
     def count_events(self):
         return self._all("SELECT COUNT(*) AS n FROM events")[0]["n"]
 

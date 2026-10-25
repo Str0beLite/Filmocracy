@@ -3,15 +3,26 @@ import random
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 from . import config
 from .encoder import embed
-from .model import scores
 
 
 @torch.no_grad()
-def score_feed(model, x, movie_vecs):
-    return scores(model, torch.from_numpy(x.copy()), torch.from_numpy(movie_vecs)).numpy()
+def score_feed(model, x, movie_vecs, prior=None, pos=(), neg=()):
+    """Score every film for one feed. pos/neg are the films voted on so far: they pull the predicted taste toward the
+    loves and away from the passes right away, so the next rec reacts to votes before W retrains."""
+    vecs = torch.from_numpy(movie_vecs)
+    y = model(torch.from_numpy(x.copy()))
+    if pos or neg:
+        d = torch.zeros_like(y)
+        if pos:
+            d += vecs[sorted(pos)].mean(0)
+        if neg:
+            d -= 0.5 * vecs[sorted(neg)].mean(0)
+        y = F.normalize(y + config.VOTE_PULL * min(len(pos) + len(neg), 10) * d, dim=-1)
+    return (y @ vecs.T + model.pop_term(None if prior is None else torch.from_numpy(prior))).numpy()
 
 
 @torch.no_grad()

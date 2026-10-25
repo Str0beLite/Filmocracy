@@ -10,7 +10,7 @@ A FastAPI service that turns screenshots of someone's Instagram feed into film r
 
 Neither side has a fixed tag list. Every tag string is turned into a vector by a frozen text encoder (`BAAI/bge-small-en-v1.5`, a small sentence model on CPU, not an LLM), so a bag of tags of any size becomes one 384-number vector.
 
-1. **Feed vector x.** A Meta Llama vision model reads each feed screenshot and writes 5–15 free-form tags with weights from 0 to 1, covering what it shows ("street food", "deadlift") and how it feels ("chaotic energy", "dark humor"). Ads get flagged and dropped. Then x = normalize(Σ wᵢ · E(tagᵢ)) over all the screenshots' tags. This is the only LLM step.
+1. **Feed vector x.** Each Explore screenshot is split into tiles (`tandem/grid.py`), and Meta Muse Spark reads each tile and writes 5–15 free-form tags with weights from 0 to 1, covering what it shows ("street food", "deadlift") and how it feels ("chaotic energy", "dark humor"). Ads get flagged and dropped. Then x = normalize(Σ wᵢ · E(tagᵢ)) over all the screenshots' tags. This is the only LLM step.
 2. **Film vectors tₘ.** The same thing for each film's tags in the database: its strongest 20 genome tags, weighted by relevance, or IDF-weighted tags from a custom CSV. The vectors are then centred on the average film, so tags that every film has don't count.
 3. **Translate.** ŷ = normalize(W x) with W = I + ABᵀ (384 × 384, rank-8 update). A starts at 0, so on day 0 W is the identity and tags match by meaning ("dark humor reels" lands near "dark comedy"). The trained part is ~6k parameters however many tags exist.
 4. **Score.** score(m) = ŷ · tₘ. Serve the top 8, plus 2 exploration picks drawn at random from ranks 11–50. Each rec says which of your feed's tags pushed it up (`because_of`).
@@ -21,7 +21,7 @@ Neither side has a fixed tag list. Every tag string is turned into a vector by a
 
    The trainer then checks recall@50 on a held-out set (hidden favourites plus the newest 10% of loves). The new W is hot-swapped in only if it scores at least as well. W is shared, so it learns cross-vocabulary links like "gym" → "underdog story" from early users and applies them to everyone after.
 
-Code map: `tandem/model.py` (W, loss), `tandem/trainer.py` (loop, gate, hot-swap), `tandem/vision.py` (Llama), `tandem/encoder.py` (tag embeddings), `tandem/api.py` (endpoints), `tandem/store.py` (SQLite).
+Code map: `tandem/model.py` (W, loss), `tandem/trainer.py` (loop, gate, hot-swap), `tandem/grid.py` (Explore tiles), `tandem/vision.py` (Muse Spark), `tandem/encoder.py` (tag embeddings), `tandem/api.py` (endpoints), `tandem/store.py` (SQLite).
 
 ## Setup
 
@@ -31,7 +31,7 @@ Copy `backend/.env.example` to `backend/.env` and fill it in. `.env` is gitignor
 
 | Key | Needed for | Where to get it |
 |---|---|---|
-| `LLAMA_API_KEY` | Reading feed screenshots | [llama.developer.meta.com](https://llama.developer.meta.com) → sign in → **API keys** → create. Without it, `POST /feeds` still accepts `tags` JSON (handy for testing). |
+| `MUSE_API_KEY` | Reading feed screenshots | [dev.meta.ai](https://dev.meta.ai) → sign in → **API keys** → create (US public preview, pay as you go). Without it, `POST /feeds` still accepts `tags` JSON (handy for testing). |
 | `GOOGLE_CLIENT_ID` | Sign-in (every endpoint except `/health`, `/model`, `/movies/search`) | [Google Cloud console](https://console.cloud.google.com/apis/credentials) → create a project → **OAuth consent screen** (External, add yourself as a test user) → **Credentials → Create credentials → OAuth client ID → Web application**. Under **Authorized JavaScript origins** add `http://localhost:5173` and, later, your Vercel domain. Use the same client id in the frontend's `VITE_GOOGLE_CLIENT_ID`. No client secret is needed. |
 | `TANDEM_ADMIN_TOKEN` | `POST /admin/retrain` | Any long random string: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. If it's unset, the endpoint is locked. |
 
@@ -46,7 +46,7 @@ pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 ```
 
-The vision call goes to any OpenAI-compatible endpoint. Defaults: `LLAMA_BASE_URL=https://api.llama.com/compat/v1/`, `LLAMA_MODEL=Llama-4-Maverick-17B-128E-Instruct-FP8`. To use the same Llama models elsewhere, point those at Together or Groq, or run Ollama locally with `llama3.2-vision`.
+The vision call goes to the Meta Model API's OpenAI-compatible Chat Completions. Defaults: `MUSE_BASE_URL=https://api.meta.ai/v1`, `MUSE_MODEL=muse-spark-1.3`. `muse-spark-1.3-contributor` is about 10x cheaper, but Meta may train on those requests. Any other OpenAI-compatible vision endpoint works too.
 
 ### 3. Catalog (already built and committed)
 
@@ -82,7 +82,7 @@ With the server running in dev-auth mode, each teammate runs this with their own
 
 ```bash
 python scripts/play.py alice                       # type your feed as tags, add films you love, then rate recs
-python scripts/play.py alice --shots ~/Pictures/feed/*.png   # read real screenshots instead (needs LLAMA_API_KEY)
+python scripts/play.py alice --shots ~/Pictures/feed/*.png   # read real screenshots instead (needs MUSE_API_KEY)
 python scripts/play.py alice --boost heist         # what a host's mood pick does to the list
 ```
 
@@ -109,9 +109,9 @@ python scripts/seed_fake.py --api http://localhost:8000      # 60 fake users, ab
 
 The algorithm is done: tags to x, W, recs, group lists, live training and the recall gate. Two pieces are owned by teammates now.
 
-**1. Screenshots → feed tags (`tandem/vision.py`).** This is a first version that has never run against the real API, because there was no `LLAMA_API_KEY`. The contract the rest of the code depends on:
+**1. Screenshots → feed tags (`tandem/vision.py`).** Tested against the real Muse API on real Explore screenshots. The contract the rest of the code depends on:
 - `read_screenshots([(bytes, media_type), ...])` returns one `(is_noise, {tag: weight 0..1})` per screenshot.
-- `merge(readings)` returns `({tag: weight}, n_dropped)`.
+- `summarize(readings)` (async) returns `({tag: weight}, n_dropped)`: one text-only call sums up every tile's tags, falling back to `merge()`'s plain average.
 - `POST /feeds` passes that dict to `catalog.feed_vector`, which turns it into x.
 
 Anything that produces lowercase free-form tags with weights works: a different model, a different prompt, or OCR of captions. Changing the encoder (`bge-small`) or `DIM` means rebuilding the catalog and throwing away `w_seed.pt` and every checkpoint.
@@ -153,7 +153,7 @@ A **rec** looks like `{rec_id, id, title, year, tmdb_id, tags, score, because_of
 
 1. New project → **Deploy from GitHub repo** → this repo. In the service's **Settings**, set **Root Directory** to `backend`. Railway picks up `Dockerfile` and `railway.json`, and the health check is `/health`.
 2. **Add a Volume** to the service, mounted at `/data`. The SQLite log and W checkpoints live there and survive redeploys.
-3. **Variables:** `LLAMA_API_KEY`, `GOOGLE_CLIENT_ID`, `TANDEM_ADMIN_TOKEN` (plus `LLAMA_BASE_URL` / `LLAMA_MODEL` if you're not on Meta's API). Don't set `TANDEM_DEV_AUTH`.
+3. **Variables:** `MUSE_API_KEY`, `GOOGLE_CLIENT_ID`, `TANDEM_ADMIN_TOKEN` (plus `MUSE_BASE_URL` / `MUSE_MODEL` to change the model). Don't set `TANDEM_DEV_AUTH`.
 4. **Settings → Networking → Generate Domain.** Check `https://<domain>/health` shows `"movies": 5000`.
 5. Frontend (Vercel): set `VITE_API_URL=https://<railway domain>`, plus `VITE_GOOGLE_CLIENT_ID` and `VITE_TMDB_TOKEN`. Add the Vercel domain to the OAuth client's **Authorized JavaScript origins**.
 
@@ -165,8 +165,8 @@ Hugging Face Spaces (Docker, free CPU) also works, but its disk is wiped on rest
 
 | Var | Default | |
 |---|---|---|
-| `LLAMA_API_KEY` | none | Needed for screenshots |
-| `LLAMA_BASE_URL`, `LLAMA_MODEL` | Meta Llama API, Llama 4 Maverick | Any OpenAI-compatible vision endpoint |
+| `MUSE_API_KEY` | none | Needed for screenshots |
+| `MUSE_BASE_URL`, `MUSE_MODEL` | Meta Model API, `muse-spark-1.3` | Any OpenAI-compatible vision endpoint |
 | `GOOGLE_CLIENT_ID` | none | OAuth web client id. Unset = every signed-in endpoint returns 401 |
 | `TANDEM_ADMIN_TOKEN` | none | Unset = `/admin/retrain` returns 403 |
 | `TANDEM_SEED_W` | `catalog/w_seed.pt` | Pre-trained W a fresh database starts from; point at a missing file to start at W = I |

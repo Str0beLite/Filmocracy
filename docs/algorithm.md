@@ -15,7 +15,7 @@ A handoff guide to the backend in `backend/`. It splits the system into three pi
 ```
  feed screenshots                                   movie tag database
         │                                                   │
-        ▼  (A) Llama vision                                  ▼  (B) build_catalog.py
+        ▼  (A) tiles + Muse                                 ▼  (B) build_catalog.py
  {tag: weight}  "gym": 0.9, "dark humor": 0.6       {tag: relevance} per film
         │                                                   │
         ▼  (A) embed each tag, weighted mean                 ▼  (B) embed each tag, weighted mean, centre
@@ -34,7 +34,7 @@ The key idea is that **both sides are bags of tags of any size.** Every tag stri
 
 **Tag encoder.** For any tag string $s$, $E(s) \in \mathbb{R}^{384}$ with $\lVert E(s) \rVert = 1$.
 
-**Feed vector (piece A).** Take the tags $\{(s_i, w_i)\}$ read from all non-ad screenshots, with weights averaged across screenshots:
+**Feed vector (piece A).** Take the tags $\{(s_i, w_i)\}$ for the whole feed: one text-only Muse call reads every non-ad tile's tags and sums up the person in 10 to 15 tags (falling back to weights averaged across tiles if that call fails):
 
 $$x = \operatorname{normalize}\Big(\sum_i w_i\, E(s_i)\Big)$$
 
@@ -46,9 +46,11 @@ Centring on $\mu$, the "average film", removes what every film shares, so cosine
 
 **Translate and score (pieces C + B).**
 
-$$\hat y = \operatorname{normalize}(W x), \qquad W = I + AB^\top,\ A, B \in \mathbb{R}^{384 \times 8}, \qquad \text{score}(m) = \hat y \cdot t_m$$
+$$\hat y = \operatorname{normalize}(W x), \qquad W = I + AB^\top,\ A, B \in \mathbb{R}^{384 \times 8}, \qquad \text{score}(m) = \hat y \cdot t_m + p\,\pi_m$$
 
-$A$ starts at 0, so on day 0 $W = I$ and tags match purely by meaning. Training only ever moves the low-rank part (~6k numbers).
+$A$ starts at 0, so on day 0 $W = I$ and tags match purely by meaning. $\pi_m$ is the film's popularity prior (its rating-count rank percentile, squared; `Catalog.prior`) and $p$ is one learned number starting at `POP_INIT = 0.05`, so W doesn't spend rank on "people like hits". Training only ever moves $A$, $B$ and $p$ (~6k numbers).
+
+**Live vote pull (serving only).** Before W retrains, each feed's votes so far already move its recs: $\hat y \leftarrow \operatorname{normalize}\big(\hat y + 0.1 \min(n, 10)\,(\overline{t}_{P} - 0.5\,\overline{t}_{N})\big)$, where $n$ is the number of votes (`VOTE_PULL`). The group list uses every member's votes. Training still uses the raw $x$.
 
 **Training loss (piece C).** For each user $u$ with loved films $P_u$ and passed films $N_u$:
 
@@ -78,15 +80,16 @@ These are the things that must stay true. Everything else inside a piece can cha
 
 ## Piece A: screenshot → feed embedding
 
-Flow: `POST /feeds` (multipart `files`) → `vision.read_screenshots(shots)` → `[(is_noise, {tag: w})]` per screenshot → `vision.merge()` averages the non-noise ones → `Catalog.feed_vector(tags)` → `x`.
+Flow: `POST /feeds` (multipart `files`) → `grid.split_explore()` turns each Explore screenshot into one shot per tile (non-grid images stay whole) → `vision.read_screenshots(shots)` → `[(is_noise, {tag: w})]` per screenshot → `vision.summarize()` boils the non-noise ones down in one text-only call (`merge()`'s average is the fallback) → `Catalog.feed_vector(tags)` → `x`.
 
-- **Model:** Meta Llama vision through any OpenAI-compatible endpoint. Set `LLAMA_API_KEY`, `LLAMA_BASE_URL` and `LLAMA_MODEL`. The default is Meta's Llama API with Llama 4 Maverick.
+- **Tiles:** `grid.py` finds the thin background-colour gutters between tiles and cuts along them (XY-cut), then drops the status, search and nav bars. Tiles cut short by a white sky are grown back to full size.
+- **Model:** Meta Muse Spark (`muse-spark-1.3`) over the Meta Model API's OpenAI-compatible Chat Completions. Set `MUSE_API_KEY`, and optionally `MUSE_BASE_URL` and `MUSE_MODEL`.
 - **Prompt and schema:** `vision.PROMPT` and `vision.SCHEMA` ask for 5–15 tags covering content and vibe. Prompt quality is the biggest lever here.
 - **Parsing:** `vision.parse_reply` is tolerant of code fences and junk. An unreadable reply counts that screenshot as noise.
-- **Testing without a key:** `POST /feeds` also takes `tags` as JSON, which skips Llama.
+- **Testing without a key:** `POST /feeds` also takes `tags` as JSON, which skips Muse Spark.
 
 Ideas worth trying:
-- One Llama call per screenshot vs. batching several images.
+- One Muse Spark call per tile vs. batching several tiles in one request (up to 50 images).
 - Asking for separate "content" and "mood" tag lists with different weights.
 - Dropping near-duplicate tags.
 - Weighting screenshots by recency.

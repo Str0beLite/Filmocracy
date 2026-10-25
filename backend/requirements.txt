@@ -3,8 +3,9 @@ fastapi==0.115.12
 uvicorn[standard]==0.34.2
 python-multipart>=0.0.12
 numpy>=1.26,<2
+pillow>=10   # splits Explore screenshots into tiles
 pydantic>=2.7
-openai>=1.50   # client for Meta's OpenAI-compatible Llama API
+openai>=1.50   # client for the Meta Model API (Muse Spark), OpenAI-compatible
 sentence-transformers>=3.0   # frozen tag encoder (bge-small), not an LLM
 pytest>=8
 httpx==0.28.1

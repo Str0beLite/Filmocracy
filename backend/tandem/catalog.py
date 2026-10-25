@@ -20,6 +20,9 @@ class Catalog:
         self.vecs = unit(self.raw - self.center).astype(np.float32)
         self.id_to_idx = {m["id"]: i for i, m in enumerate(self.movies)}
         self.w0 = np.eye(config.DIM, dtype=np.float32)   # day 0: W = I, pure tag-meaning match
+        # Popularity prior: squared rank percentile of rating count (ties share the lower rank; no counts -> all 0).
+        counts = np.array([m.get("popularity", 0) for m in self.movies])
+        self.prior = (np.searchsorted(np.sort(counts), counts) / max(len(counts) - 1, 1)).astype(np.float32) ** 2
 
     @classmethod
     def load(cls, path=None):
@@ -27,7 +30,7 @@ class Catalog:
         return cls(json.loads((path / "movies.json").read_text()), np.load(path / "movie_vecs.npy"))
 
     def feed_vector(self, weights: dict):
-        """Any {tag: weight} from Llama -> x. Not centred: subtracting the film centre would make an
+        """Any {tag: weight} from Muse Spark -> x. Not centred: subtracting the film centre would make an
         unrelated feed point away from "generic film" and pull up oddballs for no reason."""
         return bag(weights)
 

@@ -1,6 +1,6 @@
 """The frozen tag encoder E: any tag string -> a 384-number vector. Never trained.
 
-Because tags become vectors, neither side needs a fixed tag list: "gym rat humour" from Llama and
+Because tags become vectors, neither side needs a fixed tag list: "gym rat humour" from Muse Spark and
 "dark comedy" from the movie database land in the same space, near whatever they mean.
 """
 import hashlib

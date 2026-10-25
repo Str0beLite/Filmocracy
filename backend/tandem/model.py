@@ -2,10 +2,11 @@
 
     ŷ = normalize(W x),   W = I + A Bᵀ,   score(m) = ŷ · t_m
 
-x is the weighted mean embedding of the feed's tags (any tags Llama wrote), t_m the same for a film's
+x is the weighted mean embedding of the feed's tags (any tags Muse Spark wrote), t_m the same for a film's
 tags from the database. Both live in the encoder's 384-dim space, so W is 384×384 whatever the tag
 counts are. A starts at zero, so day 0 is W = I: match tags by meaning. A Bᵀ is low rank (~6k params)
-so a handful of users can't wreck it.
+so a handful of users can't wreck it. One more number, pop, weighs each film's popularity prior (catalog.prior), so
+W doesn't have to spend rank on 'people like hits'.
 """
 import torch
 import torch.nn.functional as F
@@ -20,6 +21,7 @@ class Translator(torch.nn.Module):
         n_out, n_in = self.W0.shape
         self.A = torch.nn.Parameter(torch.zeros(n_out, rank))
         self.B = torch.nn.Parameter(torch.randn(n_in, rank) * 0.01)
+        self.pop = torch.nn.Parameter(torch.tensor(config.POP_INIT))
 
     def W(self):
         return self.W0 + self.A @ self.B.T
@@ -27,13 +29,16 @@ class Translator(torch.nn.Module):
     def forward(self, x):                       # x: (..., DIM) feed vector -> predicted film taste (..., DIM)
         return F.normalize(x @ self.W0.T + (x @ self.B) @ self.A.T, dim=-1)
 
+    def pop_term(self, prior):
+        return 0.0 if prior is None else self.pop * prior
+
     def reg(self):
         return (self.A @ self.B.T).pow(2).sum()
 
 
-def scores(model, x, movies):
-    """Cosine between the predicted film taste and every movie's tag vector."""
-    return model(x) @ movies.T
+def scores(model, x, movies, prior=None):
+    """Cosine between the predicted film taste and every movie's tag vector, plus the learned popularity term."""
+    return model(x) @ movies.T + model.pop_term(prior)
 
 
 def taste_target(movies, pos, neg):
@@ -45,10 +50,11 @@ def taste_target(movies, pos, neg):
 
 
 def loss_fn(model, feeds, examples, movies, tau=config.TAU, beta=config.BETA, lam=config.LAMBDA,
-            hard_w=config.HARD_NEG_WEIGHT):
+            hard_w=config.HARD_NEG_WEIGHT, prior=None):
     """
     feeds:    {feed_id: {"x": (n_ig,) tensor, "pos": set(idx), "neg": set(idx)}}
     examples: [(feed_id, positive_idx)]   (the training positives; held-out ones are left out)
+    prior:    (n_movies,) popularity prior, or None to leave popularity out
 
     Three terms:
       1. taste:   1 - cos(W x, y_u)  — land on the user's film-taste vector from their IG vector alone.
@@ -66,7 +72,7 @@ def loss_fn(model, feeds, examples, movies, tau=config.TAU, beta=config.BETA, la
         if not mine and not f["neg"]:
             continue
         pred = model(f["x"])
-        logits = (pred @ movies.T) / tau
+        logits = (pred @ movies.T + model.pop_term(prior)) / tau
         neg = torch.tensor(sorted(f["neg"]), dtype=torch.long)
         if mine:
             taste_terms.append(1 - pred @ taste_target(movies, set(mine), f["neg"]))
@@ -87,21 +93,21 @@ def loss_fn(model, feeds, examples, movies, tau=config.TAU, beta=config.BETA, la
 
 
 @torch.no_grad()
-def recall_at_k(model, feeds, examples, movies, k=config.RECALL_K):
+def recall_at_k(model, feeds, examples, movies, k=config.RECALL_K, prior=None):
     """Fraction of held-out (feed, loved film) pairs where the film lands in the top k."""
     if not examples:
         return None
     hits, cache = 0, {}
     for fid, j in examples:
         if fid not in cache:
-            cache[fid] = scores(model, feeds[fid]["x"], movies)
+            cache[fid] = scores(model, feeds[fid]["x"], movies, prior)
         s = cache[fid]
         hits += int((s >= s[j]).sum().item() - 1 < k)   # ties count against us
     return hits / len(examples)
 
 
 def state(model):
-    return {"A": model.A.detach().clone(), "B": model.B.detach().clone()}
+    return {"A": model.A.detach().clone(), "B": model.B.detach().clone(), "pop": model.pop.detach().clone()}
 
 
 def from_state(w0, st):
@@ -109,4 +115,6 @@ def from_state(w0, st):
     with torch.no_grad():
         m.A.copy_(st["A"])
         m.B.copy_(st["B"])
+        if "pop" in st:   # checkpoints from before pop keep POP_INIT
+            m.pop.copy_(st["pop"])
     return m
