@@ -11,6 +11,8 @@ def _env(name, default, cast=str):
 
 # Movie catalog with each film's tags + tag-embedding vector (built once by scripts/build_catalog.py, committed).
 CATALOG_DIR = Path(_env("TANDEM_CATALOG_DIR", ROOT / "catalog"))
+# Pre-trained W a fresh database starts from (scripts/seed_fake.py + real ratings). Delete it to start at W = I.
+SEED_W = Path(_env("TANDEM_SEED_W", CATALOG_DIR / "w_seed.pt"))
 # Runtime state (SQLite log + W checkpoints). On Railway, mount a volume here.
 DATA_DIR = Path(_env("TANDEM_DATA_DIR", ROOT / "data"))
 DB_PATH = DATA_DIR / "tandem.db"

@@ -72,6 +72,51 @@ curl -H 'Authorization: Bearer host' -H 'Content-Type: application/json' -d '{"b
 curl -H 'Authorization: Bearer alice' -H 'Content-Type: application/json' -d '{"movie_id":6,"label":"love"}' localhost:8000/feedback
 ```
 
+### 5. Test and train from the terminal
+
+With the server running in dev-auth mode, each teammate runs this with their own name:
+
+```bash
+python scripts/play.py alice                       # type your feed as tags, add films you love, then rate recs
+python scripts/play.py alice --shots ~/Pictures/feed/*.png   # read real screenshots instead (needs LLAMA_API_KEY)
+python scripts/play.py alice --boost heist         # what a host's mood pick does to the list
+```
+
+Keys: `y` want to watch, `s` seen it and loved it, `f` loved it and save it as a favourite, `n` nah, Enter for don't know it, and `+title` to search any film and save it as a favourite. Each rating is one training event, and favourites also feed the held-out check (about 30% are hidden). W retrains on its own every 20 events (`TANDEM_RETRAIN_EVERY`), and the server log prints `[trainer] vN ACCEPTED|rejected recall@50 old -> new`. You can force a round with `curl -XPOST -H "X-Admin-Token: $TANDEM_ADMIN_TOKEN" localhost:8000/admin/retrain`. `GET /model` lists every round.
+
+- A new W only goes live when held-out recall doesn't drop. With only a few events, the held-out set is one or two films, so expect a lot of rejections at first.
+- Recall is checked against films you listed as already loved (30% of them are hidden) plus the newest 10% of likes. List 5 to 10 favourites per person so the check means something.
+- Everything lives in `data/` (`tandem.db` and `checkpoints/`). Delete that folder to start over from the seed W.
+
+### 6. The pre-trained W and fake users
+
+`catalog/w_seed.pt` is a W that's already trained. A fresh database (a new `data/`, or a new Railway volume) starts from it instead of from W = I, and the version still shows as `v0`. Delete the file, or point `TANDEM_SEED_W` somewhere else, to start from W = I.
+
+It was trained on 60 fake users from `scripts/seed_fake.py`, plus about 140 real ratings from the team. On held-out favourites, recall@50 went from 0.33 with W = I to 0.51.
+
+```bash
+python scripts/seed_fake.py --api http://localhost:8000      # 60 fake users, about 1900 ratings, a few minutes
+```
+
+- **How the fake users work.** Each fake user is built from 1 or 2 of 14 personas (gym, skincare, true crime, anime, cinephile, space, horror, parents, history, streetwear, memes, sad indie, gamer, outdoors). A persona pairs Instagram-style tags ("deadlift") with the catalog tags of the films it likes ("sports", "martial arts"). On top of that, everyone leans toward the hits: the most-rated films get loved whatever the feed says.
+- **What it teaches W.** W learns the rules written into the personas, not real taste. That's fine for a demo, but remove the fake data once real users show up. Every fake user id starts with `fake-`: delete those feeds and their events and recs from the database, then retrain.
+
+## Handoff: what's still open
+
+The algorithm is done: tags to x, W, recs, group lists, live training and the recall gate. Two pieces are owned by teammates now.
+
+**1. Screenshots → feed tags (`tandem/vision.py`).** This is a first version that has never run against the real API, because there was no `LLAMA_API_KEY`. The contract the rest of the code depends on:
+- `read_screenshots([(bytes, media_type), ...])` returns one `(is_noise, {tag: weight 0..1})` per screenshot.
+- `merge(readings)` returns `({tag: weight}, n_dropped)`.
+- `POST /feeds` passes that dict to `catalog.feed_vector`, which turns it into x.
+
+Anything that produces lowercase free-form tags with weights works: a different model, a different prompt, or OCR of captions. Changing the encoder (`bge-small`) or `DIM` means rebuilding the catalog and throwing away `w_seed.pt` and every checkpoint.
+
+**2. The server and accounts (Supabase rewrite).** The algorithm only needs a stable user id per person. Today that's the Google `sub`, or the dev-auth name. What the backend still lacks:
+- **Groups are in memory** (`state["groups"]` in `api.py`), so they're lost on every restart.
+- **Sessions don't exist yet.** There's no current trailer, no vote tally, no end rule. A session layer would pick a film from `POST /groups/{id}/recs`, show it, and send each vote to `POST /feedback` with `{movie_id, label}`: yes is `love`, no is `nah`.
+- **Feeds, events and W versions are in SQLite** on the Railway volume. Moving them to Supabase means rewriting `store.py` behind the same methods.
+
 ## API
 
 Everything except `/health`, `/model` and `/movies/search` needs `Authorization: Bearer <Google ID token>` (the `credential` that Google Identity Services hands the frontend). The user is the token's Google account id (`sub`).
@@ -120,6 +165,7 @@ Hugging Face Spaces (Docker, free CPU) also works, but its disk is wiped on rest
 | `LLAMA_BASE_URL`, `LLAMA_MODEL` | Meta Llama API, Llama 4 Maverick | Any OpenAI-compatible vision endpoint |
 | `GOOGLE_CLIENT_ID` | none | OAuth web client id. Unset = every signed-in endpoint returns 401 |
 | `TANDEM_ADMIN_TOKEN` | none | Unset = `/admin/retrain` returns 403 |
+| `TANDEM_SEED_W` | `catalog/w_seed.pt` | Pre-trained W a fresh database starts from; point at a missing file to start at W = I |
 | `TANDEM_DEV_AUTH` | 0 | 1 = `Bearer <name>` signs in as `<name>`. Local only |
 | `TANDEM_TAG_BOOST` | 0.15 | Score added for a boost-tag match. Real scores span ~0 (median) to ~0.3 (top), so 0.15 nearly fills the top 10 with tagged films (ranked by taste among them). Try 0.05 for a nudge |
 | `TANDEM_DATA_DIR` | `backend/data` (`/data` in Docker) | SQLite + checkpoints |

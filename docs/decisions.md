@@ -16,3 +16,5 @@ One line each: date, decision, why.
 - 2026-10-24: Catalog = top 5000 MovieLens 25M films with tag-genome scores, committed. Posters/trailers come from TMDB on the fly in the frontend by `tmdb_id`, not baked into the catalog.
 - 2026-10-24: Frontend on Vercel (`VITE_API_URL` → Railway domain).
 - 2026-10-24: Dropped the first Supabase session service (app.py, sessions/rounds/votes RPCs) in favour of the algorithm service; Supabase stays and will be rewritten around the algorithm's API. Its applied migrations stay in `supabase/migrations/` so `supabase db push` history matches the live project.
+- 2026-10-25: Commit a pre-trained W (`backend/catalog/w_seed.pt`); a fresh database starts from it instead of W = I. Trained on 60 synthetic persona users (`scripts/seed_fake.py`, ids `fake-*`, with a popularity pull) + team ratings; recall@50 0.33 → 0.51. Drop the fake data once real users arrive.
+- 2026-10-25: Favourites accept exact `movie_ids`; the holdout split is seeded per film so one-at-a-time favourites still split ~30%.

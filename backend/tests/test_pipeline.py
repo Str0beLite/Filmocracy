@@ -16,6 +16,7 @@ from tandem.api import create_app
 from tandem.auth import current_user
 from tandem.catalog import Catalog
 from tandem.encoder import bag
+from tandem.model import Translator, state
 from tandem.recommend import boost
 from tandem.store import Store
 from tandem.trainer import Trainer
@@ -64,6 +65,7 @@ def setup(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "CKPT_DIR", tmp_path / "ckpt")
     monkeypatch.setattr(config, "RETRAIN_EVERY", 10_000)  # trigger rounds by hand in tests
     monkeypatch.setattr(config, "ADMIN_TOKEN", "admin")
+    monkeypatch.setattr(config, "SEED_W", tmp_path / "no_seed.pt")  # tests start from W = I
     return make_catalog(), Store(tmp_path / "t.db")
 
 
@@ -71,6 +73,18 @@ def test_untrained_translator_is_identity(setup):
     cat, store = setup
     t = Trainer(store, cat)
     assert torch.allclose(t.model.W(), torch.eye(config.DIM))
+
+
+def test_fresh_database_starts_from_seed_w(setup, tmp_path, monkeypatch):
+    cat, store = setup
+    seed = Translator(cat.w0)
+    with torch.no_grad():
+        seed.A.normal_()
+        seed.B.normal_()
+    torch.save(state(seed), tmp_path / "seed.pt")
+    monkeypatch.setattr(config, "SEED_W", tmp_path / "seed.pt")
+    t = Trainer(store, cat)
+    assert t.version == 0 and torch.allclose(t.model.W(), seed.W())
 
 
 def test_api_round_trip_and_live_training(setup):
@@ -202,6 +216,20 @@ def test_group_recs_per_member_and_average(setup, monkeypatch):
         assert c.post("/feedback", json={"movie_id": shown[0], "label": "love"}, headers=as_("a")).status_code == 200
         assert cat.id_to_idx[shown[0]] in store.rated_movies(fa)
         assert c.post("/feedback", json={"movie_id": shown[0], "label": "love"}, headers=as_("nobody")).status_code == 409
+
+
+def test_favourites_by_movie_id_one_at_a_time(setup):
+    cat, store = setup
+    with client(cat, store) as c:
+        fid = c.post("/feeds", data={"tags": json.dumps({"gym": 1.0})}, headers=as_("a")).json()["feed_id"]
+        splits = []
+        for m in cat.movies[:40]:   # one call per film, like play.py's [f] key
+            res = c.post(f"/feeds/{fid}/favourites", json={"movie_ids": [m["id"]]}, headers=as_("a")).json()
+            assert [x["id"] for x in res["matched"]] == [m["id"]]
+            splits.append(res["matched"][0]["split"])
+        assert {"train", "holdout"} == set(splits)   # a shared seed would put every one on the same side
+        assert c.post(f"/feeds/{fid}/favourites", json={"movie_ids": [-1]}, headers=as_("a")).json()["missing"] == [-1]
+        assert store.count_events() == 40
 
 
 def test_boost_matches_normalised_tags_exactly():
