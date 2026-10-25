@@ -179,3 +179,14 @@ SQLite schema are unchanged. Integration changes were reviewed before the approv
 Environment templates contain placeholders only; a real key encountered in a local
 example was privately preserved and removed from the template. Existing ignored
 credential files were not changed. No push, branch merge or deployment was performed during this integration.
+
+## Live Muse verification (2026-10-25)
+
+After configuring `MUSE_API_KEY` in ignored `backend/.env.test`, one real request
+through `vision.read_screenshots` succeeded against Meta's API using
+`muse-spark-1.3`, low reasoning and the application JSON schema/token budget.
+A small synthetic image produced 11 parsed tags and was not classified as noise.
+No retries, personal screenshots, database writes or model training were involved;
+API credentials and image contents were not logged. This supersedes the earlier
+missing-credential limitation for live inference. Actual Instagram screenshot
+quality and Railway/provider load remain acceptance checks.

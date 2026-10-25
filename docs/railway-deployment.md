@@ -203,7 +203,10 @@ Sources: [Chat Completions](https://dev.meta.ai/docs/protocols/chat-completions)
 [structured output](https://dev.meta.ai/docs/structured-output),
 [reasoning](https://dev.meta.ai/docs/reasoning).
 
-No local Muse credential was found during integration. Request formatting is tested
-through the real SDK against a mock transport; live Muse inference, key validity,
-account quota and actual screenshot interpretation remain unverified until a key is
-configured. Do not treat the successful Docker/session tests as a live vision test.
+Live Muse verification passed on 2026-10-25 after the key was configured locally:
+one synthetic-image request through the application vision function succeeded with
+`muse-spark-1.3`, `reasoning_effort=low`, the JSON schema and configured token budget.
+The response parsed into 11 tags and was not marked as noise. Retries were disabled;
+neither the key nor image contents were logged. This verifies endpoint/model access
+and the request/response contract. Real Instagram screenshot quality, production
+quota/load and Railway connectivity still require post-deployment checks.
