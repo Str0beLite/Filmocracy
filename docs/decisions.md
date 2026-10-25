@@ -21,3 +21,23 @@ One line each: date, decision, why.
 - 2026-10-25: Vision moves from Llama to Meta Muse Spark (`muse-spark-1.3`, Meta Model API). Explore screenshots are split into tiles by pixel colour (`grid.py`) and each tile is read on its own; Muse's 4M tokens/min limit makes per-tile calls practical.
 - 2026-10-25: Muse prompt asks for personality traits phrased like film tags, not post contents; reasoning effort `minimal` (same tags as `low` in testing, ~40% faster per tile). After the per-tile reads, one text-only Muse call (`vision.summarize`) sums the whole feed up into 10–15 tags; plain averaging is the fallback. Tags-only beat also sending the screenshots.
 - 2026-10-25: Dev-only `GET /dev/feeds/{fid}/top` (TANDEM_DEV_AUTH=1) + `scripts/vision_demo.html` for testing screenshots → tags → top 5, scored with untrained W = I plus a 0.05 × popularity-percentile² nudge.
+- 2026-10-24: Demo UI is a no-build React page (React 18 from a CDN, JSX compiled by in-browser Babel) in `frontend/demo`, served with `python -m http.server`. The local Node is 14.17, too old for Vite, and this needs no install.
+- 2026-10-24: The demo fakes the group in one browser tab (three scripted friends, scripted votes). No backend or real-time sync yet.
+- 2026-10-24: Three candidate looks (Velvet, Neon, Matinee) are CSS token sets switchable from the demo toolbar. Pick one before building the real app.
+- 2026-10-24: Only the big screen moves the night forward (start, skip, picks, start movie). Phones join, react and vote, then wait with instructions.
+- 2026-10-24: Dropped the per-person "movie vibe" card; each person picks how they want to feel tonight instead, and it shows on their seat.
+- 2026-10-24: The night ends on a top 3 (golden buzzers first, then by votes, then by prediction) plus 5 predicted recs.
+- 2026-10-24: Progress shows as a "completion status" loading bar in the big screen's top-right, not as a model confidence score.
+- 2026-10-24: Votes are private. Screens show who has voted and whether it was unanimous, never who said yes or no (no per-seat reveal, no counts).
+- 2026-10-25: Real app = Vite + React + TypeScript in `frontend/` on Node 24 LTS (winget's current LTS). Velvet is the only look; `frontend/demo` stays as a reference.
+- 2026-10-25: First app pass is frontend only: buttons navigate, and screens read typed mock data shaped like the backend's responses through `src/api`. Swapping that module is how the backend gets wired in.
+- 2026-10-25: Replaced the per-screen mock with a fake backend inside the Vite dev server (`frontend/mock-backend/`): one in-memory room, actions over POST, live snapshots over Server-Sent Events. Lets the team test the real multi-phone experience with no Python service. The real session service should keep the same snapshot/actions protocol.
+- 2026-10-25: Devices follow the room: each frame navigates to the screen the room's state implies, so the URL always names the screen. Phones are identified per browser tab (sessionStorage); the name step stands in for Google sign-in.
+- 2026-10-25: React Router, one URL per screen (`/tv/*`, `/phone/*`), plus a dev-only index of every screen at `/`.
+- 2026-10-25: Onboarding on the phone = join → Sign in with Google → tonight's feeling → 3 Instagram Explore screenshots → reading → waiting.
+- 2026-10-25: Every 5 trailers without a golden buzzer, the TV offers "See our picks" or "Keep watching". A golden buzzer offers picks or keep browsing.
+- 2026-10-25: GSAP (`@gsap/react`) only for the big moments (curtains, golden buzzer, podium, screen changes); CSS for the rest; everything honours reduced motion.
+- 2026-10-25: Posters and trailers stay generated art / placeholders until the backend is wired; then TMDB by `tmdb_id`.
+- 2026-10-25: Deferred to backend wiring: an in-memory sessions module (FastAPI + WebSockets) that runs the night; dev login locally, Google on the hosted server; re-rank group recs after every vote, excluding films already shown; each feeling maps to catalog tags and everyone's are blended into one boost list.
+- 2026-10-25: Trailers come from TMDB (`/movie/{tmdb_id}/videos`, official YouTube trailer first), not MovieLens's `ml-20m-youtube` file: that file stops around 2015 and many of its links are dead. The TV plays it in a youtube-nocookie embed; no token or no trailer falls back to placeholder art.
+- 2026-10-25: A real trailer plays to its end. The TV listens to the YouTube embed (postMessage): when it starts playing it tells the room the video's length (`trailerPlaying`, so phones show the right clock), and when it ends it opens voting. The room keeps a backstop timer 5 s past the end; placeholder trailers stay 12 s.
