@@ -2,7 +2,7 @@
 
     ŷ = normalize(W x),   W = I + A Bᵀ,   score(m) = ŷ · t_m
 
-x is the weighted mean embedding of the feed's tags (any tags Llama wrote), t_m the same for a film's
+x is the weighted mean embedding of the feed's tags (any tags Muse Spark wrote), t_m the same for a film's
 tags from the database. Both live in the encoder's 384-dim space, so W is 384×384 whatever the tag
 counts are. A starts at zero, so day 0 is W = I: match tags by meaning. A Bᵀ is low rank (~6k params)
 so a handful of users can't wreck it.

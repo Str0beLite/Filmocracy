@@ -13,7 +13,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import config, vision
+from . import config, grid, vision
 from .auth import current_user, require_admin
 from .catalog import Catalog
 from .encoder import get_encoder, unit
@@ -71,16 +71,19 @@ def create_app(catalog=None, store=None, start_trainer=True):
     @app.post("/feeds")
     async def create_feed(tags: str = Form(""), files: Annotated[list[UploadFile], File()] = (),
                           user: str = Depends(current_user)):
-        """Upload feed screenshots (read by Llama vision) and/or a JSON {tag: weight} map. Returns a feed_id."""
+        """Upload feed screenshots (Explore pages are split into tiles, each read by Muse Spark) and/or a JSON {tag: weight} map. Returns a feed_id."""
         cat = state["catalog"]
         manual = json.loads(tags) if tags.strip() else {}
-        shots = [(await f.read(), f.content_type or "image/png") for f in files]
+        shots = []
+        for f in files:   # an Explore screenshot becomes one shot per tile; anything else stays whole
+            data = await f.read()
+            shots += grid.split_explore(data) or [(data, f.content_type or "image/png")]
         if not manual and not shots:
             raise HTTPException(400, "send at least one screenshot, or tags as JSON")
         weights, dropped = {}, 0
         if shots:
             if not vision.has_api_key():
-                raise HTTPException(503, f"screenshots need {config.LLAMA_API_KEY_ENV}; send tags instead")
+                raise HTTPException(503, f"screenshots need {config.MUSE_API_KEY_ENV}; send tags instead")
             weights, dropped = vision.merge(await vision.read_screenshots(shots))
         for t, w in manual.items():
             t = " ".join(str(t).lower().split())

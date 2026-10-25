@@ -162,7 +162,7 @@ def test_checkpoint_reloads_on_restart(setup):
     assert torch.allclose(t1.model.A, t2.model.A)
 
 
-def test_screenshots_go_through_llama_and_ads_are_dropped(setup, monkeypatch):
+def test_screenshots_go_through_muse_and_ads_are_dropped(setup, monkeypatch):
     cat, store = setup
 
     async def fake_read(shots):
@@ -176,7 +176,7 @@ def test_screenshots_go_through_llama_and_ads_are_dropped(setup, monkeypatch):
         assert res["dropped_as_noise"] == 1 and res["tags"] == {"gym": 0.9, "brutalist architecture": 0.2}
 
 
-def test_llama_reply_parsing_is_tolerant():
+def test_muse_reply_parsing_is_tolerant():
     text = '```json\n{"is_ad_or_noise": false, "tags": [{"tag": " Gym  Rat ", "weight": 1.4}, {"tag": "", "weight": 0.5}]}\n```'
     assert vision.parse_reply(text) == (False, {"gym rat": 1.0})
 

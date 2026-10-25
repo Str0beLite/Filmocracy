@@ -3,7 +3,7 @@
 Needs the API running with TANDEM_DEV_AUTH=1 (the name you pass is your user id):
     python scripts/play.py alice                         # reuse alice's latest feed, or make one
     python scripts/play.py alice --new                   # type a fresh set of feed tags
-    python scripts/play.py alice --shots a.png b.png     # read screenshots with Llama (needs LLAMA_API_KEY)
+    python scripts/play.py alice --shots a.png b.png     # read screenshots with Muse Spark (needs MUSE_API_KEY)
     python scripts/play.py alice --boost heist           # push films with a tag up, like the host's mood pick
 Keys while rating: y/s/f/n, enter to skip, +title to favourite any film, q to quit.
 """
@@ -31,7 +31,7 @@ def main():
     ap.add_argument("name")
     ap.add_argument("--api", default="http://localhost:8000")
     ap.add_argument("--new", action="store_true", help="make a new feed even if you have one")
-    ap.add_argument("--shots", nargs="*", default=[], help="feed screenshots to read with Llama")
+    ap.add_argument("--shots", nargs="*", default=[], help="feed screenshots to read with Muse Spark")
     ap.add_argument("--boost", nargs="*", default=[])
     a = ap.parse_args()
     s = requests.Session()

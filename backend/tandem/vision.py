@@ -1,6 +1,6 @@
-"""The only LLM step: a Meta Llama vision model reads feed screenshots into free-form tags with weights.
+"""The only LLM step: Meta Muse Spark reads each Explore tile into free-form tags with weights.
 
-Talks to any OpenAI-compatible endpoint (Meta's Llama API by default; see config.LLAMA_*).
+Talks to the Meta Model API's OpenAI-compatible Chat Completions (see config.MUSE_*).
 """
 import asyncio
 import base64
@@ -12,13 +12,13 @@ from . import config
 
 
 def has_api_key() -> bool:
-    return bool(os.environ.get(config.LLAMA_API_KEY_ENV))
+    return bool(os.environ.get(config.MUSE_API_KEY_ENV))
 
 
 def _client():
     from openai import AsyncOpenAI
 
-    return AsyncOpenAI(api_key=os.environ.get(config.LLAMA_API_KEY_ENV), base_url=config.LLAMA_BASE_URL)
+    return AsyncOpenAI(api_key=os.environ.get(config.MUSE_API_KEY_ENV), base_url=config.MUSE_BASE_URL)
 
 
 SCHEMA = {
@@ -34,10 +34,12 @@ SCHEMA = {
 }
 
 PROMPT = (
-    "This is a screenshot of someone's Instagram feed or a reel they watched. Describe it with 5 to 15 short "
-    "lowercase tags (1 to 4 words each), each with a weight from 0 to 1 for how strongly it applies. Cover what "
-    "it shows (e.g. 'street food', 'deadlift') AND how it feels (e.g. 'chaotic energy', 'cozy', 'dark humor'). "
-    "Set is_ad_or_noise to true for ads, sponsored posts, or screens with no real content.\n\n"
+    "This is one post or reel from someone's Instagram Explore page, which Instagram picked to match their "
+    "taste. Guess what kind of person this user is, with 5 to 15 short lowercase tags (1 to 4 words each), each "
+    "with a weight from 0 to 1 for how strongly it applies. At least half the tags must be moods, vibes or "
+    "personality (e.g. 'cozy', 'dark humor', 'chaotic energy', 'adrenaline junkie'); the rest can name the "
+    "topic (e.g. 'street food', 'deadlift'). Skip plain objects unless they are the whole theme. "
+    "Set is_ad_or_noise to true for ads, sponsored posts, or tiles with no real content.\n\n"
     'Reply with JSON only: {"is_ad_or_noise": false, "tags": [{"tag": "...", "weight": 0.8}]}'
 )
 
@@ -65,8 +67,9 @@ async def read_screenshots(screenshots, concurrency=6):
         async with sem:
             uri = f"data:{media_type};base64,{base64.standard_b64encode(data).decode()}"
             resp = await client.chat.completions.create(
-                model=config.LLAMA_MODEL,
-                max_tokens=512,
+                model=config.MUSE_MODEL,
+                max_tokens=config.MUSE_MAX_TOKENS,
+                **({"reasoning_effort": config.MUSE_REASONING} if config.MUSE_REASONING else {}),
                 messages=[{"role": "user", "content": [
                     {"type": "image_url", "image_url": {"url": uri}},
                     {"type": "text", "text": PROMPT},

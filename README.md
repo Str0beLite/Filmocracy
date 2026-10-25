@@ -7,7 +7,7 @@ Under the hood is a small learned matrix **W** that translates "Instagram taste"
 ## How it works
 
 ```
- feed screenshots ──► Llama vision ──► tags {"gym": 0.9, "dark humor": 0.6, ...}
+ Explore screenshot ──► tiles ──► Muse Spark ──► tags {"gym": 0.9, "dark humor": 0.6, ...}
                                             │  embed each tag, weighted mean
                                             ▼
                                      x  (384-dim feed vector)
@@ -18,7 +18,7 @@ Under the hood is a small learned matrix **W** that translates "Instagram taste"
                                      W = I + ABᵀ  ◄── retrain every 20 taps ◄─┘
 ```
 
-1. **Read the feed.** A Meta Llama vision model looks at each screenshot and writes free-form tags with weights. The tags cover what's on screen ("street food", "deadlift") and how it feels ("cozy", "chaotic energy"). Ads get dropped.
+1. **Read the feed.** Each Explore screenshot is split into its tiles using pixel colour alone (`grid.py`), and Meta Muse Spark looks at each tile and writes free-form tags with weights. The tags cover what's on screen ("street food", "deadlift") and how it feels ("cozy", "chaotic energy"). Ads get dropped.
 2. **Embed both sides the same way.** Every tag, from the feed or from the movie tag database, goes through one frozen text encoder (`bge-small`). A bag of tags becomes the weighted mean of its tag vectors. No fixed tag lists anywhere: any tag works on either side.
 3. **Translate.** W maps the feed vector into film-taste space. On day 0, W is the identity, so tags match by meaning ("dark humor" ≈ "dark comedy").
 4. **Recommend.** Films are ranked by cosine to the translated vector. You get the top 8, plus 2 exploration picks so the model can learn beyond what it already believes. Each pick says which of your feed's tags drove it.
@@ -31,7 +31,7 @@ The full math, and the contract between each piece, are in **[docs/algorithm.md]
 | Path | What's there |
 |---|---|
 | `backend/` | FastAPI service: vision, embeddings, W, live trainer, SQLite log. [Setup, API and deploy →](backend/README.md) |
-| `backend/tandem/` | `vision.py` (Llama), `encoder.py` (tag embeddings), `model.py` (W + loss), `trainer.py` (live loop), `recommend.py`, `api.py` |
+| `backend/tandem/` | `grid.py` (Explore tiles), `vision.py` (Muse Spark), `encoder.py` (tag embeddings), `model.py` (W + loss), `trainer.py` (live loop), `recommend.py`, `api.py` |
 | `backend/scripts/build_catalog.py` | One-off builder: movie tag database → film vectors |
 | `frontend/` | Client app (in progress) |
 | `docs/algorithm.md` | How the algorithm works, split into pieces with owners and interfaces |
@@ -54,4 +54,4 @@ Tests: `cd backend && TANDEM_FAKE_ENCODER=1 pytest -q`. They use a fake encoder 
 
 ## Stack
 
-Python, FastAPI, PyTorch (CPU), `sentence-transformers` (`BAAI/bge-small-en-v1.5`), Meta Llama 4 vision (OpenAI-compatible API), and SQLite. It deploys as one Docker container on Railway, with a volume at `/data` for the event log and W checkpoints.
+Python, FastAPI, PyTorch (CPU), `sentence-transformers` (`BAAI/bge-small-en-v1.5`), Meta Muse Spark (Meta Model API, OpenAI-compatible), and SQLite. It deploys as one Docker container on Railway, with a volume at `/data` for the event log and W checkpoints.
