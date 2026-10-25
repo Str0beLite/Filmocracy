@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Check, ThumbsDown, ThumbsUp } from 'lucide-react';
+import { ArrowRight, Check, ThumbsDown, ThumbsUp, X } from 'lucide-react';
 import { ApiError, http } from '../api/http';
 import { FEELINGS } from '../api/data';
 import type { FeelingId } from '../api';
@@ -9,14 +9,9 @@ import { FeelingStep, NameStep, READ_MS, ReadingStep, ScreenshotsStep } from '..
 import './training.css';
 
 type Step = 'name' | 'feeling' | 'screenshots' | 'reading' | 'watch' | 'done';
-const VOTE_CHOICES = [
-  { label: 'love', title: 'Like', positive: true, seen: false },
-  { label: 'nah', title: 'Dislike', positive: false, seen: false },
-  { label: 'seen_loved', title: 'Like', positive: true, seen: true },
-  { label: 'seen_disliked', title: 'Dislike', positive: false, seen: true },
-] as const;
 interface Recommendation {
   rec_id: number;
+  score?: number;
   w_version: number;
   movie: { id: number; title: string; year?: number; overview?: string; trailer_key: string };
 }
@@ -44,6 +39,8 @@ export function Training() {
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [votes, setVotes] = useState(0);
   const [saved, setSaved] = useState(false);
+  const [seen, setSeen] = useState<boolean | null>(null);
+  const ballotTitle = useRef<HTMLHeadingElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -56,6 +53,7 @@ export function Training() {
   useEffect(() => {
     document.title = 'Train Your Taste · Filmocracy';
   }, []);
+  useEffect(() => { if (seen !== null) ballotTitle.current?.focus(); }, [seen]);
   useEffect(() => { scope.current?.querySelector('h1')?.focus(); }, [step]);
   useMotion(() => { gsap.from('.ps > *', { y: 14, autoAlpha: 0, stagger: 0.04, duration: 0.5, ease: 'expo.out' }); }, scope, [step]);
   useEffect(() => () => previewUrls.current.forEach((url) => URL.revokeObjectURL(url)), []);
@@ -93,6 +91,7 @@ export function Training() {
     try {
       const result = await http<Recommendation>(`/training/feeds/${fid}/next`, { boost: choice?.boost ?? [] });
       setRec(result);
+      setSeen(null);
       setSaved(false);
       setNotice('');
       return true;
@@ -188,20 +187,30 @@ export function Training() {
             </> : <p className="ps-sub">Your taste profile is saved. Find a trailer when you’re ready.</p>}
           </div>
           <section className="training-ballot" aria-labelledby="training-vote-title">
-            <h2 id="training-vote-title" className="display training-ballot-title">{saved ? 'Vote saved.' : rec ? 'What do you think?' : 'Ready for a trailer?'}</h2>
+            <h2 id="training-vote-title" ref={ballotTitle} tabIndex={-1} className="display training-ballot-title">{saved ? 'Vote saved.' : rec ? seen === null ? 'Have you watched this movie?' : seen ? 'Did you like it?' : 'Would you watch it?' : 'Ready for a trailer?'}</h2>
+            {rec && <p className="training-note">{typeof rec.score === 'number' && Number.isFinite(rec.score)
+              ? <>AI match score: <strong>{rec.score.toFixed(3)}</strong>. Higher means a stronger predicted match; this is not a confidence percentage.</>
+              : 'AI match score unavailable.'}</p>}
             <p className="training-note" role="status">{votes} {votes === 1 ? 'vote' : 'votes'} saved · {notice || 'Your vote stays private.'}</p>
-            {rec && !saved ? <div className="training-votes">
-              {VOTE_CHOICES.map((vote) => <button
-                key={vote.label}
-                className={`vote-btn ${vote.positive ? 'vote-btn--yes' : 'vote-btn--no'}`}
-                disabled={busy}
-                aria-busy={busy}
-                onClick={() => void run(async () => {
-                  await http('/feedback', { rec_id: rec.rec_id, label: vote.label });
-                  setSaved(true); setVotes((n) => n + 1); setNotice('Vote saved');
-                })}
-              >{vote.positive ? <ThumbsUp aria-hidden="true" /> : <ThumbsDown aria-hidden="true" />}<span>{vote.title}{vote.seen && <small>and have seen it</small>}</span></button>)}
-            </div> : <button className="btn btn-primary" disabled={busy || !feed} onClick={() => void run(() => next(feed!))}>{busy ? 'Finding a trailer…' : 'Next Trailer'}<ArrowRight aria-hidden="true" /></button>}
+            {rec && !saved ? seen === null ? <div className="training-votes">
+              <button className="vote-btn" disabled={busy} onClick={() => setSeen(true)}><Check aria-hidden="true" /><span>Watched</span></button>
+              <button className="vote-btn" disabled={busy} onClick={() => setSeen(false)}><X aria-hidden="true" /><span>Not watched</span></button>
+            </div> : <>
+              <p className="training-note">{seen ? 'Watched' : 'Not watched'} · <button className="training-change" disabled={busy} onClick={() => { setSeen(null); ballotTitle.current?.focus(); }}>Change</button></p>
+              <div className="training-votes">
+                {([false, true] as const).map((positive) => <button
+                  key={String(positive)}
+                  className={`vote-btn ${positive ? 'vote-btn--yes' : 'vote-btn--no'}`}
+                  disabled={busy}
+                  aria-busy={busy}
+                  onClick={() => void run(async () => {
+                    const label = seen ? positive ? 'seen_loved' : 'seen_disliked' : positive ? 'love' : 'nah';
+                    await http('/feedback', { rec_id: rec.rec_id, label });
+                    setSaved(true); setVotes((n) => n + 1); setNotice('Vote saved');
+                  })}
+                >{positive ? <ThumbsUp aria-hidden="true" /> : <ThumbsDown aria-hidden="true" />}<span>{seen ? positive ? 'Liked it' : 'Disliked it' : positive ? 'Interested' : 'Not interested'}</span></button>)}
+              </div>
+            </> : <button className="btn btn-primary" disabled={busy || !feed} onClick={() => void run(() => next(feed!))}>{busy ? 'Finding a trailer…' : 'Next Trailer'}<ArrowRight aria-hidden="true" /></button>}
             <div className="training-secondary">
               {rec && !saved && <button className="btn btn-ghost" disabled={busy} onClick={() => void run(() => next(feed!))}>Skip trailer</button>}
               <button className="btn btn-ghost" disabled={busy} onClick={() => setStep('done')}>Finish for now</button>

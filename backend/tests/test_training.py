@@ -76,6 +76,7 @@ def test_training_votes_playable_selection_no_repeats_and_restart(training_setup
         app.state.integration.playable = playable
         path = f"/training/feeds/{fid}/next"
         first = sessions.post(c, path, "a", json={"boost": ["tag 1"]}).json()
+        assert isinstance(first["score"], float)
         assert first["movie"]["id"] != 51
         assert first["movie"]["trailer_key"] == "abcdefghijk"
         assert first["movie"]["id"] in calls

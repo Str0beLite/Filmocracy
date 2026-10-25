@@ -229,6 +229,7 @@ class SessionRecommendations:
                 )
                 return {
                     "rec_id": ids[0],
+                    "score": float(scores[idx]),
                     "w_version": version,
                     "movie": {**row, **cat.public(idx), "trailer_key": youtube_id(row)},
                 }

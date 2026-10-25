@@ -1,7 +1,7 @@
 # Individual training on a self-hosted laptop
 
 Open `/training`: First name → feeling → **1–3 Explore
-screenshots** → trailers and private four-choice votes. Each image must be JPEG, PNG
+screenshots** → trailers and private two-step votes. Each image must be JPEG, PNG
 or WebP, up to 10 MiB. No TV, room or invitation is required. Onboarding renders the
 app's own phone screens (`frontend/src/phone/onboarding.tsx`), including the reading screen;
 it reuses the browser identity, Muse tiling, recommender and feedback format.
@@ -153,6 +153,8 @@ the production environment. Keep one worker and preserve the runtime directory
 and checkpoints together. No service installation or remote deployment is needed
 for local testing; see [self-hosting](self-hosting.md) for the existing services.
 
-The training voting screen places the embedded trailer above a dedicated four-button panel: Like, Dislike, Like and have seen it, and Dislike and have seen it. Details and taste tags are collapsed below the voting controls. One, two or three screenshots can start training; additional images are optional.
+The training voting screen places the embedded trailer above a two-step voting panel: first Watched or Not watched; Watched leads to Liked it or Disliked it, while Not watched leads to Interested or Not interested. Seen status can be changed before saving; only the second step submits feedback. Details and taste tags are collapsed below the voting controls. One, two or three screenshots can start training; additional images are optional.
 
 Seen status is retained in each feedback label. `love` and `seen_loved` use the existing positive-training path; `nah` and `seen_disliked` use the existing negative-training path. The scoring formula and training weights are unchanged.
+
+The voting panel displays the existing model’s raw AI match score (three decimal places). It includes taste similarity, popularity, vote pull, and mood boosts; it is not a calibrated confidence or like-probability percentage. The training-next response exposes this value as `score`. Scoring and training weights are unchanged.
