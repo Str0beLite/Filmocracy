@@ -594,3 +594,24 @@ def test_live_room_stage_feelings_and_reactions(setup):
         assert state["server_now"]
         clock.now += 60   # reactions are short-lived
         assert get(c, f"/sessions/{sid}", "c").json()["reactions"] == []
+
+
+def test_account_favourites_and_delete(setup):
+    factory, store, _ = setup
+    with TestClient(factory()) as c:
+        h = {"Authorization": "Bearer d"}
+        assert post(c, "/me/favourites", "a", json={"movie_ids": [50]}).status_code == 409
+        sid = lobby(c)["session_id"]
+        post(c, "/feeds", "a", data={"tags": '{"tag 2":1}'})  # a newer feed; favourites follow the person
+        assert post(c, "/me/favourites", "a", json={"movie_ids": [50, 51]}).json()["missing"] == []
+        assert [m["id"] for m in get(c, "/me/favourites", "a").json()] == [51, 50]
+        assert c.delete("/me/favourites/50", headers={"Authorization": "Bearer a"}).status_code == 200
+        assert [m["id"] for m in get(c, "/me/favourites", "a").json()] == [51]
+        assert get(c, "/me/favourites", "b").json() == []
+        assert c.delete("/me", headers={"Authorization": "Bearer a"}).json() == {"ok": True}
+        assert get(c, "/me", "a").json()["feed_id"] is None
+        assert get(c, "/me/favourites", "a").json() == []
+        assert get(c, "/profiles/me", "a").json()["display_name"] == "Guest"
+        assert "a" not in get(c, f"/sessions/{sid}", "b").json()["session_feeds"]
+        assert get(c, "/me", "b").json()["feed_id"] is not None
+        assert c.delete("/me", headers=h).status_code == 401

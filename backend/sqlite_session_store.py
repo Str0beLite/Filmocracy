@@ -419,6 +419,25 @@ class SessionStore:
             )
         return {"id": user, "display_name": name}
 
+    def delete_account(self, user):
+        """Drop a person's feeds, votes-as-training and name. Past nights keep an anonymous seat."""
+        with self.transaction() as db:
+            feeds = "SELECT id FROM feeds WHERE user=?"
+            db.execute(f"DELETE FROM events WHERE feed_id IN ({feeds})", (user,))
+            db.execute(f"DELETE FROM recs WHERE feed_id IN ({feeds})", (user,))
+            db.execute("DELETE FROM feeds WHERE user=?", (user,))
+            db.execute("DELETE FROM session_feeds WHERE user_id=?", (user,))
+            if db.execute(
+                "SELECT 1 FROM tandem_members WHERE user_id=? UNION SELECT 1 FROM tandem_sessions"
+                " WHERE host_user_id=?",
+                (user, user),
+            ).fetchone():
+                # Session rows reference the profile, so it stays, nameless.
+                db.execute("UPDATE tandem_profiles SET display_name='Guest' WHERE id=?", (user,))
+            else:
+                db.execute("DELETE FROM tandem_profiles WHERE id=?", (user,))
+        return {"ok": True}
+
     def bind(self, sid, user, fid):
         with self.transaction() as db:
             self.member(db, sid, user)

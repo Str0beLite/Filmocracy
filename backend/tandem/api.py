@@ -221,6 +221,27 @@ def create_app(catalog=None, store=None, start_trainer=True, principal=None):
             state["trainer"].notify_event()
         return {"matched": matched, "missing": missing}
 
+    # The phone's account screen: favourites follow the person, not one feed.
+    @app.get("/me/favourites")
+    def my_favourites(user: str = Depends(identity)):
+        cat = state["catalog"]
+        return [cat.public(i) for i in state["store"].favourites(user)]
+
+    @app.post("/me/favourites")
+    def add_my_favourites(body: Favourites, user: str = Depends(identity)):
+        f = state["store"].latest_feed(user)
+        if not f:
+            raise HTTPException(409, "upload a feed first")
+        return add_favourites(f["id"], body, user)
+
+    @app.delete("/me/favourites/{movie_id}")
+    def remove_my_favourite(movie_id: int, user: str = Depends(identity)):
+        idx = state["catalog"].id_to_idx.get(movie_id)
+        if idx is None:
+            raise HTTPException(404, "unknown movie_id")
+        state["store"].remove_favourite(user, idx)
+        return {"ok": True}
+
     @app.get("/feeds/{fid}/recs")
     def recs(fid: str, boost: Annotated[list[str], Query()] = (), user: str = Depends(identity)):
         v, out = _recs(_feed(fid, user), boost)

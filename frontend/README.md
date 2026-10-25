@@ -46,6 +46,8 @@ Other commands: `npm run build` (type-check + production build), `npm run lint`,
 | `/tv/picks`: top 3 + 5 more, Start #1 | `/phone/picks` |
 | `/tv/showing/:id`, then New night, same crew | `/phone/showing/:id` |
 
+The person icon at the top of the phone opens `/phone/account` (outside the room's flow): update the Explore page, add or remove favourite films, log out, or delete the account. With no password, logging out loses that account for good.
+
 Votes stay private: the server never sends how anyone voted, only who has voted and whether it was unanimous. Each phone remembers its own vote. Voting closes by itself after 60 s, so a phone that fell asleep can't stall the night.
 
 ## Where things live

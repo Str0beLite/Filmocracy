@@ -88,7 +88,7 @@ def create_app(catalog=None, store=None, metadata=None, clock=None):
             for v in os.getenv("FRONTEND_ORIGINS", "http://localhost:5173").split(",")
             if v.strip()
         ],
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "Last-Event-ID"],
     )
     app.include_router(router)

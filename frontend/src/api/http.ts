@@ -11,12 +11,12 @@ export class ApiError extends Error {
   }
 }
 
-export async function http<T = unknown>(path: string, body?: unknown): Promise<T> {
+export async function http<T = unknown>(path: string, body?: unknown, method?: 'DELETE'): Promise<T> {
   const t = token();
   if (!t) throw new ApiError('Sign in first', 401);
   const form = body instanceof FormData;
   const res = await fetch(`${API}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: method ?? (body === undefined ? 'GET' : 'POST'),
     headers: { Authorization: `Bearer ${t}`, ...(body !== undefined && !form ? { 'Content-Type': 'application/json' } : {}) },
     body: body === undefined ? undefined : form ? body : JSON.stringify(body),
   });
