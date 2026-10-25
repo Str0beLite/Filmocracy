@@ -1,18 +1,8 @@
 .training-page { gap: 12px; }
 .training-page .ps-title { overflow-wrap: anywhere; }
-.training-page .feeling[aria-pressed='true'] { border-color: var(--gold); background: color-mix(in srgb, var(--gold) 12%, var(--surface)); box-shadow: inset 0 0 0 1px var(--gold); }
-.training-page .feeling[aria-pressed='true'] svg { color: var(--gold); }
-.training-page .feeling:not([aria-pressed='true']):hover { border-color: var(--line-strong); }
-.training-skip { position: absolute; z-index: 10; top: 12px; left: 12px; padding: 12px; background: var(--bg); }
-.training-skip:not(:focus) { width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); }
-.training-page .ps-top a { text-decoration: none; }
+.training .ps-top a { text-decoration: none; }
 .training-label, .training-note, .training-youtube { color: var(--muted); font-size: 14px; line-height: 1.6; }
 .training-label { text-align: right; }
-.training-form { display: flex; flex: 1; flex-direction: column; gap: 20px; }
-.training-page .shot-slot { position: relative; }
-.training-remove { position: absolute; top: 4px; right: 4px; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--bg); }
-.training-remove:hover { background: var(--surface-2); }
-.training-remove svg { width: 18px; height: 18px; }
 .training-trailer { display: block; width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 12px; background: var(--stage); }
 .training-watch { display: flex; flex: 1; flex-direction: column; gap: 20px; }
 .training-player { display: flex; flex-direction: column; gap: 8px; }

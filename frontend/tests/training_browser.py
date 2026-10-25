@@ -81,24 +81,24 @@ def check(browser, width, height, existing=None, shot_count=3):
     assert page.get_by_label('First name').get_attribute('maxlength') == '20'
     page.get_by_label('First name').fill('Test Viewer')
     page.get_by_role('button', name='Continue', exact=True).click()
-    page.get_by_role('button', name='Laugh until it hurts').click()
-    assert page.get_by_role('button', name='Laugh until it hurts').get_attribute('aria-pressed') == 'true'
+    page.get_by_role('radio', name='Laugh until it hurts').click()
+    assert page.get_by_role('radio', name='Laugh until it hurts').get_attribute('aria-checked') == 'true'
     page.screenshot(path=f'/private/tmp/tandem-training-feeling-{width}.png', full_page=True)
     page.get_by_role('button', name='Continue', exact=True).click()
-    upload = page.get_by_label('Choose Explore screenshots')
-    assert page.get_by_role('button', name='Read My Feed', exact=True).is_disabled()
+    upload = page.locator('input[type=file]')
+    assert page.get_by_role('button', name='Read my feed', exact=True).count() == 0
     upload.set_input_files([{'name': 'one.png', 'mimeType': 'image/png', 'buffer': PNG}])
-    assert page.get_by_role('button', name='Read My Feed', exact=True).is_enabled()
+    assert page.get_by_role('button', name='Read my feed', exact=True).is_enabled()
     if shot_count > 1:
         upload.set_input_files([{'name': f'{i}.png', 'mimeType': 'image/png', 'buffer': PNG} for i in range(2, shot_count + 1)])
     page.get_by_role('button', name='Remove screenshot 1').click()
     if shot_count == 1:
-        assert page.get_by_role('button', name='Read My Feed', exact=True).is_disabled()
+        assert page.get_by_role('button', name='Read my feed', exact=True).count() == 0
     else:
-        assert page.get_by_role('button', name='Read My Feed', exact=True).is_enabled()
+        assert page.get_by_role('button', name='Read my feed', exact=True).is_enabled()
     upload.set_input_files([{'name': 'replacement.png', 'mimeType': 'image/png', 'buffer': PNG}])
     page.screenshot(path=f'/private/tmp/tandem-training-shots-{width}.png', full_page=True)
-    page.get_by_role('button', name='Read My Feed', exact=True).click()
+    page.get_by_role('button', name='Read my feed', exact=True).click()
     page.get_by_role('heading', name='Test Movie 1', exact=True).wait_for()
     page.wait_for_function("() => {const buttons = [...document.querySelectorAll('.training-votes .vote-btn')]; return buttons.length === 2 && buttons.every(b => {const s = getComputedStyle(b).scale; return s === 'none' || Math.abs(parseFloat(s) - 1) < 0.001;});}")
     page.evaluate('window.scrollTo(0, 0)')

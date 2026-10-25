@@ -2,8 +2,9 @@
 
 Open `/training`: First name → feeling → **1–3 Explore
 screenshots** → trailers and private two-step votes. Each image must be JPEG, PNG
-or WebP, up to 10 MiB. No TV, room or invitation is required. The page uses the
-existing Velvet design, browser identity, Muse tiling, recommender and feedback format.
+or WebP, up to 10 MiB. No TV, room or invitation is required. Onboarding renders the
+app's own phone screens (`frontend/src/phone/onboarding.tsx`), including the reading screen;
+it reuses the browser identity, Muse tiling, recommender and feedback format.
 
 ## Run the backend
 

@@ -1,7 +1,7 @@
 ﻿// Phone screens. Onboarding moves on by itself; after that a phone only
 // waits, reacts and votes, and follows the big screen through the night.
 
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import {
   ArrowRight,
@@ -9,7 +9,6 @@ import {
   Clapperboard,
   Film,
   Hourglass,
-  ImagePlus,
   Lock,
   Popcorn,
   ShieldCheck,
@@ -19,13 +18,14 @@ import {
   Vote,
   X,
 } from 'lucide-react';
-import { EMOTES, FEELINGS, act, movie, type Snapshot } from '../api';
+import { EMOTES, act, movie, type Snapshot } from '../api';
 import { Avatar, Confetti, LivePill, PickSource, Poster, Wildcard, Wordmark } from '../components/ui';
 import { FEELING_ICONS } from '../lib/feelings';
 import { trailerProgress } from '../lib/night';
-import { gsap, useElapsed, useMotion } from '../lib/motion';
+import { gsap, useMotion } from '../lib/motion';
 import { useRoom, useServerNow } from '../room/useRoom';
 import { usePhone } from './usePhone';
+import { FeelingStep, MAX_SHOTS, NameStep, READ_MS, ReadingStep, ScreenshotsStep } from './onboarding';
 
 const seatedOf = (s: Snapshot) => s.people.filter((p) => p.seated);
 
@@ -126,60 +126,33 @@ export function PhoneSignIn() {
 export function PhoneName() {
   const { me, setMe } = usePhone();
   const navigate = useNavigate();
-  const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return (
-    <section className="ps">
-      <Top />
-      <form
-        style={{ display: 'contents' }}
-        onSubmit={async (e) => {
-          e.preventDefault();
-          if (me) return navigate('/phone/feeling');
-          setBusy(true);
-          try {
-            const { id } = await act<{ id: string }>('join', { name });
-            setMe(id);
-            navigate('/phone/feeling');
-          } catch (err) {
-            setError(
-              err instanceof Error && /invitation|ended/i.test(err.message)
-                ? 'That room has closed. Scan the QR code on the big screen again.'
-                : 'Couldn’t reach the big screen. Check you’re on the same Wi-Fi, then try again.',
-            );
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <h1 className="ps-title display">What do your friends call you?</h1>
-        <p className="ps-sub">It goes on your seat on the big screen.</p>
-        <label className="field">
-          First name
-          <input
-            className="field-text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Alex…"
-            autoComplete="given-name"
-            name="name"
-            maxLength={20}
-            aria-invalid={Boolean(error)}
-          />
-        </label>
-        {error && (
-          <p className="field-error" role="alert">
-            {error}
-          </p>
-        )}
-        <div className="ps-foot">
-          <button className="btn btn-primary" disabled={!name.trim() || busy}>
-            Take my seat <ArrowRight aria-hidden="true" />
-          </button>
-        </div>
-      </form>
-    </section>
+    <NameStep
+      top={<Top />}
+      sub="It goes on your seat on the big screen."
+      cta="Take my seat"
+      busy={busy}
+      error={error}
+      onSubmit={async (name) => {
+        if (me) return navigate('/phone/feeling');
+        setBusy(true);
+        try {
+          const { id } = await act<{ id: string }>('join', { name });
+          setMe(id);
+          navigate('/phone/feeling');
+        } catch (err) {
+          setError(
+            err instanceof Error && /invitation|ended/i.test(err.message)
+              ? 'That room has closed. Scan the QR code on the big screen again.'
+              : 'Couldn’t reach the big screen. Check you’re on the same Wi-Fi, then try again.',
+          );
+        } finally {
+          setBusy(false);
+        }
+      }}
+    />
   );
 }
 
@@ -187,122 +160,42 @@ export function PhoneFeeling() {
   const { me, feeling, setFeeling } = usePhone();
   const navigate = useNavigate();
   return (
-    <section className="ps">
-      <Top />
-      <h1 className="ps-title display">How do you want to feel tonight?</h1>
-      <p className="ps-sub">Filmocracy blends everyone’s answer into what it picks.</p>
-      <div className="feeling-grid" role="radiogroup" aria-label="Tonight’s feeling">
-        {FEELINGS.map((f) => {
-          const Icon = FEELING_ICONS[f.id];
-          return (
-            <button key={f.id} role="radio" aria-checked={feeling === f.id} className="feeling" onClick={() => setFeeling(f.id)}>
-              <Icon aria-hidden="true" />
-              {f.label}
-            </button>
-          );
-        })}
-      </div>
-      <div className="ps-foot">
-        <button
-          className="btn btn-primary"
-          disabled={!feeling}
-          onClick={() => {
-            act('feeling', { id: me, feeling });
-            navigate('/phone/screenshots');
-          }}
-        >
-          Continue <ArrowRight aria-hidden="true" />
-        </button>
-      </div>
-    </section>
+    <FeelingStep
+      top={<Top />}
+      sub="Filmocracy blends everyone’s answer into what it picks."
+      feeling={feeling}
+      onPick={setFeeling}
+      onContinue={() => {
+        act('feeling', { id: me, feeling });
+        navigate('/phone/screenshots');
+      }}
+    />
   );
 }
-
-// One Explore screenshot is enough; each extra one (up to 3) steadies the picks,
-// since a single page can lean hard one way.
-const MAX_SHOTS = 3;
 
 export function PhoneScreenshots() {
   const { shots, setShots } = usePhone();
-  const input = useRef<HTMLInputElement>(null);
-  const full = shots.length >= MAX_SHOTS;
-
-  const add = (e: ChangeEvent<HTMLInputElement>) => {
-    const urls = [...(e.target.files ?? [])].map((f) => URL.createObjectURL(f));
-    setShots([...shots, ...urls].slice(-MAX_SHOTS));
-    e.target.value = '';
-  };
-  const pick = () => input.current?.click();
-
   return (
-    <section className="ps">
-      <Top />
-      <h1 className="ps-title display">Show us your Explore page.</h1>
-      <ol className="howto-shots">
-        <li>Open Instagram and tap the search tab.</li>
-        <li>Take a screenshot and add it here.</li>
-        <li>Optional: scroll and add up to 2 more for sharper picks.</li>
-      </ol>
-      <div className="shots">
-        {Array.from({ length: MAX_SHOTS }, (_, i) => (
-          <div key={i} className={`shot-slot ${shots[i] ? 'is-filled' : ''} ${i === shots.length ? 'is-next' : ''}`}>
-            {shots[i] ? (
-              <img src={shots[i]} alt={`Screenshot ${i + 1}`} width={90} height={160} />
-            ) : (
-              <>
-                <ImagePlus aria-hidden="true" />
-                {i > 0 && <small>Optional</small>}
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-      <div className="ps-foot">
-        <input
-          ref={input}
-          id="shots"
-          className="file-input"
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={add}
-          tabIndex={-1}
-          aria-hidden="true"
-        />
-        {shots.length ? (
-          <>
-            <Link className="btn btn-primary" to="/phone/reading">
-              Read my feed <ArrowRight aria-hidden="true" />
-            </Link>
-            {!full && (
-              <button className="btn btn-ghost" onClick={pick}>
-                <ImagePlus aria-hidden="true" />
-                Add another for sharper picks
-              </button>
-            )}
-          </>
-        ) : (
-          <button className="btn btn-primary" onClick={pick}>
-            <ImagePlus aria-hidden="true" />
-            Add a screenshot
-          </button>
-        )}
-        <p className="fineprint">Filmocracy only reads the tiles in your screenshots. It never sees your account.</p>
-      </div>
-    </section>
+    <ScreenshotsStep
+      top={<Top />}
+      shots={shots}
+      onAdd={(files) => setShots([...shots, ...files.map((f) => URL.createObjectURL(f))].slice(-MAX_SHOTS))}
+      next={
+        <Link className="btn btn-primary" to="/phone/reading">
+          Read my feed <ArrowRight aria-hidden="true" />
+        </Link>
+      }
+      fineprint="Filmocracy only reads the tiles in your screenshots. It never sees your account."
+    />
   );
 }
 
-const READ_MS = 5200;
-
 export function PhoneReading() {
   const { shots } = usePhone();
+  const navigate = useNavigate();
   const [tags, setTags] = useState<string[]>([]);
   const [error, setError] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const elapsed = useElapsed(150);
-  const shown = tags.filter((_, i) => elapsed > 700 + i * 650);
-  const finished = tags.length > 0 && shown.length === tags.length;
 
   // Muse reads every tile of every screenshot, which can take a while. Once the
   // tags are in and have had a moment on screen, take the seat; the room takes it from here.
@@ -323,47 +216,17 @@ export function PhoneReading() {
     };
   }, [shots, attempt]);
 
-  if (error) {
-    return (
-      <section className="ps ps--center">
-        <h1 className="ps-title display">Couldn’t read your feed.</h1>
-        <p className="ps-sub">Check your connection, then try again. Or pick different screenshots.</p>
-        <div className="ps-foot">
-          <button
-            className="btn btn-primary"
-            onClick={() => {
-              setError(false);
-              setAttempt((n) => n + 1);
-            }}
-          >
-            Try again
-          </button>
-          <Link className="btn btn-ghost" to="/phone/screenshots">
-            Pick other screenshots
-          </Link>
-        </div>
-      </section>
-    );
-  }
-
   return (
-    <section className="ps ps--center">
-      <div className="reading-shots" aria-hidden="true">
-        {shots.map((src) => (
-          <div key={src} className="reading-shot">
-            <img src={src} alt="" width={74} height={132} />
-          </div>
-        ))}
-      </div>
-      <h1 className="ps-title display">{finished ? 'Got your vibe.' : 'Reading your Explore page…'}</h1>
-      <p className="ps-sub">Filmocracy turns what your feed is full of into movie taste.</p>
-      <ul className="tags" aria-live="polite">
-        {shown.map((t) => (
-          <li key={t}>{t}</li>
-        ))}
-      </ul>
-      <div className="ps-foot" />
-    </section>
+    <ReadingStep
+      shots={shots}
+      tags={tags}
+      error={error}
+      onRetry={() => {
+        setError(false);
+        setAttempt((n) => n + 1);
+      }}
+      onRepick={() => navigate('/phone/screenshots')}
+    />
   );
 }
 

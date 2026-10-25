@@ -403,6 +403,30 @@
   color: var(--gold);
 }
 
+.shot-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.shot-remove svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) {
+  .shot-remove:hover {
+    background: var(--surface-2);
+  }
+}
+
 .file-input {
   position: absolute;
   width: 1px;
