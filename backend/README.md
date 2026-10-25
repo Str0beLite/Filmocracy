@@ -1,4 +1,4 @@
-> **Unified SQLite service:** Docker/Railway run `unified:app`; `app:app` is an alias. Use [the integration guide](../docs/unified-backend.md) for durable QR sessions, atomic votes, authorized SSE updates, metadata migration and deployment. Supabase is no longer required. All recommendation routes below remain available; unified disables model training.
+> **Unified SQLite service:** Docker/Railway run `unified:app`; `app:app` is an alias. Use [the integration guide](../docs/unified-backend.md) for durable QR sessions, atomic votes, authenticated WebSocket updates (with SSE compatibility), metadata migration and deployment. Supabase is no longer required. All recommendation routes below remain available; unified disables model training.
 >
 > Run from the repository root: `backend/.venv/bin/uvicorn unified:app --app-dir backend --host 0.0.0.0 --port 8000`. Use main's Google ID tokens, GOOGLE_CLIENT_ID, and a YOUTUBE_API_KEY for queue validation. The standalone documentation below retains its original live-training development mode.
 
@@ -178,3 +178,5 @@ Hugging Face Spaces (Docker, free CPU) also works, but its disk is wiped on rest
 | `TANDEM_FAKE_ENCODER` | 0 | 1 = hashing encoder instead of bge-small (tests, offline dev) |
 
 All other knobs (rank, τ, λ, learning rate, steps) are in `tandem/config.py`.
+
+See the [Railway production handoff](../docs/railway-deployment.md) for current dashboard settings, production variables, approval boundaries and the post-deployment checklist.
